@@ -21,8 +21,6 @@ def print_ast(node, level):
             for elem in child:
                 print_ast(elem, level + 1)
             print(" " * level, "]")
-        else:
-            pass
             # print(" " * level, "OOOO", node)
 
 

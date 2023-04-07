@@ -81,8 +81,7 @@ class OccurrencesHighlighter:
         )
 
     def _handle_response(self, msg) -> None:
-        error = getattr(msg, "error", None)
-        if error:
+        if error := getattr(msg, "error", None):
             messagebox.showerror(tr("Error"), str(error), master=get_workbench())
             return
 

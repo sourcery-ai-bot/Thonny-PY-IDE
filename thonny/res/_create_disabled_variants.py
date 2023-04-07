@@ -21,4 +21,4 @@ for name in os.listdir(d):
         )
         im = im.convert("RGBA")
         im = Image.blend(trans, im, 0.4)
-        im.save("_disabled_" + name)
+        im.save(f"_disabled_{name}")

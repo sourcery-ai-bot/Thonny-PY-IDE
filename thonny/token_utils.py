@@ -4,7 +4,7 @@ import keyword
 
 def matches_any(name, alternates):
     "Return a named group pattern matching list of alternates."
-    return "(?P<%s>" % name + "|".join(alternates) + ")"
+    return f"(?P<{name}>" + "|".join(alternates) + ")"
 
 
 # not perfect, but hopefully good enough
@@ -14,11 +14,7 @@ _builtinlist = [
     str(name) for name in dir(builtins) if not name.startswith("_") and name not in keyword.kwlist
 ]
 
-# Not really built-ins, but special names nevertheless
-_builtinlist.append("self")
-_builtinlist.append("cls")
-
-
+_builtinlist.extend(("self", "cls"))
 # TODO: move builtin handling to global-local
 BUILTIN = r"([^.'\"\\#]\b|^)" + matches_any("builtin", _builtinlist) + r"\b"
 NUMBER = matches_any(
@@ -48,8 +44,8 @@ DQSTRING_CLOSED = STRINGPREFIX + r'"[^"\\\n]*(\\.[^"\\\n]*)*"'
 SQ3STRING = STRINGPREFIX + r"'''[^'\\]*((\\.|'(?!''))[^'\\]*)*(''')?"
 DQ3STRING = STRINGPREFIX + r'"""[^"\\]*((\\.|"(?!""))[^"\\]*)*(""")?'
 
-SQ3DELIMITER = STRINGPREFIX + "'''"
-DQ3DELIMITER = STRINGPREFIX + '"""'
+SQ3DELIMITER = f"{STRINGPREFIX}'''"
+DQ3DELIMITER = f'{STRINGPREFIX}"""'
 COMMENT_WITH_Q3DELIMITER = matches_any("q3comment", [r"#[^\n]*('''|\"\"\")[^\n]*"])
 
 STRING_OPEN = matches_any("open_string", [SQSTRING_OPEN, DQSTRING_OPEN])

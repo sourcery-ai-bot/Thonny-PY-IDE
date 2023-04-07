@@ -31,20 +31,23 @@ def tomorrow_night() -> SyntaxThemeSettings:
     string3_fg = string_fg
 
     return {
-        "TEXT": {"foreground": normal_fg, "insertbackground": normal_fg, "background": "#1d1f21"},
+        "TEXT": {
+            "foreground": normal_fg,
+            "insertbackground": normal_fg,
+            "background": "#1d1f21",
+        },
         "GUTTER": {"foreground": "#c5c8c6", "background": "#282a2e"},
         "sel": {"foreground": "#c5c8c6", "background": "#373b41"},
         "current_line": {"background": "#282a2e"},
         "number": {"foreground": "#de935f"},
         "definition": {"foreground": "#81a2be", "font": "BoldEditorFont"},
-        "string": {"foreground": string_fg},
-        "string3": {"foreground": string_fg},
+        "string": {"foreground": string3_fg},
+        "string3": {"foreground": string3_fg},
         "open_string": {"foreground": string3_fg},
         "open_string3": {"foreground": string3_fg},
         "keyword": {"foreground": "#b294bb", "font": "BoldEditorFont"},
         "builtin": {"foreground": "#81a2be"},
         "comment": {"foreground": "#969896"},
-        # paren matcher
         "surrounding_parens": {
             "background": "#373b41",
             "foreground": "white",
@@ -60,20 +63,23 @@ def tomorrow_night_blue() -> SyntaxThemeSettings:
     string3_fg = string_fg
 
     return {
-        "TEXT": {"foreground": normal_fg, "insertbackground": normal_fg, "background": "#002451"},
+        "TEXT": {
+            "foreground": normal_fg,
+            "insertbackground": normal_fg,
+            "background": "#002451",
+        },
         "GUTTER": {"foreground": "#ffffff", "background": "#00346e"},
         "sel": {"foreground": "#ffffff", "background": "#003f8e"},
         "current_line": {"background": "#00346e"},
         "number": {"foreground": "#ffc58f"},
         "definition": {"foreground": "#bbdaff", "font": "BoldEditorFont"},
-        "string": {"foreground": string_fg},
-        "string3": {"foreground": string_fg},
+        "string": {"foreground": string3_fg},
+        "string3": {"foreground": string3_fg},
         "open_string": {"foreground": string3_fg},
         "open_string3": {"foreground": string3_fg},
         "keyword": {"foreground": "#ebbbff", "font": "BoldEditorFont"},
         "builtin": {"foreground": "#bbdaff"},
         "comment": {"foreground": "#7285b7"},
-        # paren matcher
         "surrounding_parens": {
             "background": "#00346e",
             "foreground": "white",
@@ -89,20 +95,23 @@ def tomorrow_night_bright() -> SyntaxThemeSettings:
     string3_fg = string_fg
 
     return {
-        "TEXT": {"foreground": normal_fg, "insertbackground": normal_fg, "background": "#000000"},
+        "TEXT": {
+            "foreground": normal_fg,
+            "insertbackground": normal_fg,
+            "background": "#000000",
+        },
         "GUTTER": {"foreground": "#dedede", "background": "#2a2a2a"},
         "current_line": {"background": "#2a2a2a"},
         "sel": {"foreground": "#dedede", "background": "#424242"},
         "number": {"foreground": "#e78c45"},
         "definition": {"foreground": "#7aa6da", "font": "BoldEditorFont"},
-        "string": {"foreground": string_fg},
-        "string3": {"foreground": string_fg},
+        "string": {"foreground": string3_fg},
+        "string3": {"foreground": string3_fg},
         "open_string": {"foreground": string3_fg},
         "open_string3": {"foreground": string3_fg},
         "keyword": {"foreground": "#c397d8", "font": "BoldEditorFont"},
         "builtin": {"foreground": "#7aa6da"},
         "comment": {"foreground": "#969896"},
-        # paren matcher
         "surrounding_parens": {
             "background": "#2a2a2a",
             "foreground": "white",
@@ -118,20 +127,23 @@ def tomorrow_night_eighties() -> SyntaxThemeSettings:
     string3_fg = string_fg
 
     return {
-        "TEXT": {"foreground": normal_fg, "insertbackground": normal_fg, "background": "#2d2d2d"},
+        "TEXT": {
+            "foreground": normal_fg,
+            "insertbackground": normal_fg,
+            "background": "#2d2d2d",
+        },
         "GUTTER": {"foreground": "#cccccc", "background": "#393939"},
         "current_line": {"background": "#393939"},
         "sel": {"foreground": "#cccccc", "background": "#515151"},
         "number": {"foreground": "#f99157"},
         "definition": {"foreground": "#6699cc", "font": "BoldEditorFont"},
-        "string": {"foreground": string_fg},
-        "string3": {"foreground": string_fg},
+        "string": {"foreground": string3_fg},
+        "string3": {"foreground": string3_fg},
         "open_string": {"foreground": string3_fg},
         "open_string3": {"foreground": string3_fg},
         "keyword": {"foreground": "#cc99cc", "font": "BoldEditorFont"},
         "builtin": {"foreground": "#6699cc"},
         "comment": {"foreground": "#999999"},
-        # paren matcher
         "surrounding_parens": {
             "background": "#393939",
             "foreground": "white",

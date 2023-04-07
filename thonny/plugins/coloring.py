@@ -81,8 +81,7 @@ class SyntaxColorer:
 
         # need to notice triple-quotes inside comments and magic commands
         self.multiline_regex = re.compile(
-            "(" + STRING3 + ")|" + COMMENT_WITH_Q3DELIMITER + "|" + MAGIC_COMMAND,
-            re.S,  # @UndefinedVariable
+            f"({STRING3})|{COMMENT_WITH_Q3DELIMITER}|{MAGIC_COMMAND}", re.S
         )
 
         self.id_regex = re.compile(r"\s+(\w+)", re.S)  # @UndefinedVariable
@@ -191,18 +190,14 @@ class SyntaxColorer:
 
                         # Mark also the word following def or class
                         if token_text in ("def", "class"):
-                            id_match = self.id_regex.match(chars, match_end)
-                            if id_match:
+                            if id_match := self.id_regex.match(chars, match_end):
                                 id_match_start, id_match_end = id_match.span(1)
                                 self.text.tag_add(
                                     "definition",
                                     start + "+%dc" % id_match_start,
                                     start + "+%dc" % id_match_end,
                                 )
-                                if token_text == "def":
-                                    tag_type = "function_definition"
-                                else:
-                                    tag_type = "class_definition"
+                                tag_type = "function_definition" if token_text == "def" else "class_definition"
                                 self.text.tag_add(
                                     tag_type,
                                     start + "+%dc" % id_match_start,
@@ -251,13 +246,9 @@ class SyntaxColorer:
         self._raise_tags()
 
     def _update_tabs(self, start, end):
-        while True:
-            pos = self.text.search("\t", start, end)
-            if pos:
-                self.text.tag_add("tab", pos)
-                start = self.text.index("%s +1 c" % pos)
-            else:
-                break
+        while pos := self.text.search("\t", start, end):
+            self.text.tag_add("tab", pos)
+            start = self.text.index(f"{pos} +1 c")
 
 
 class CodeViewSyntaxColorer(SyntaxColorer):
@@ -271,19 +262,16 @@ class CodeViewSyntaxColorer(SyntaxColorer):
         search_end = viewport_end
 
         while True:
-            res = self.text.tag_nextrange(TODO, search_start, search_end)
-            if res:
+            if res := self.text.tag_nextrange(TODO, search_start, search_end):
                 update_start = res[0]
-                update_end = res[1]
             else:
                 # maybe the range started earlier
                 res = self.text.tag_prevrange(TODO, search_start)
-                if res and self.text.compare(res[1], ">", search_end):
-                    update_start = search_start
-                    update_end = res[1]
-                else:
+                if not res or not self.text.compare(res[1], ">", search_end):
                     break
 
+                update_start = search_start
+            update_end = res[1]
             if self.text.compare(update_end, ">", search_end):
                 update_end = search_end
 
@@ -313,9 +301,7 @@ class CodeViewSyntaxColorer(SyntaxColorer):
 
 class ShellSyntaxColorer(SyntaxColorer):
     def _update_coloring(self):
-        parts = self.text.tag_prevrange("command", "end")
-
-        if parts:
+        if parts := self.text.tag_prevrange("command", "end"):
             end_row, end_col = map(int, self.text.index(parts[1]).split("."))
 
             if end_col != 0:  # if not just after the last linebreak
@@ -330,11 +316,7 @@ class ShellSyntaxColorer(SyntaxColorer):
 
 
 def update_coloring_on_event(event):
-    if hasattr(event, "text_widget"):
-        text = event.text_widget
-    else:
-        text = event.widget
-
+    text = event.text_widget if hasattr(event, "text_widget") else event.widget
     try:
         update_coloring_on_text(text, event)
     except Exception as e:

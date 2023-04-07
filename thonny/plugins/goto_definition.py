@@ -83,7 +83,7 @@ class GotoHandler:
             start_line, start_col = start_index.split(".")
             end_line, end_col = end_index.split(".")
             if start_line != end_line:
-                start_index = end_line + "." + start_col
+                start_index = f"{end_line}.{start_col}"
 
             word = text.get(start_index, end_index)
             if (
@@ -99,9 +99,8 @@ class GotoHandler:
                 text.tag_add("name_link", start_index, end_index)
                 text["cursor"] = get_hyperlink_cursor()
                 text.underlined = True
-        else:
-            if getattr(text, "underlined", False):
-                self.remove_underline(event)
+        elif getattr(text, "underlined", False):
+            self.remove_underline(event)
 
     def _index_doesnt_have_tags(self, text, index, tags: Set[str]) -> bool:
         return not (set(text.tag_names(index)) & tags)

@@ -86,15 +86,12 @@ class AstView(ui_utils.TreeFrame):
 
             elif isinstance(node, list):
                 fields = list(enumerate(node))
-                if len(node) == 0:
-                    value_label = "[]"
-                else:
-                    value_label = "[...]"
+                value_label = "[]" if len(node) == 0 else "[...]"
             else:
                 fields = []
                 value_label = repr(node)
 
-            item_text = str(key) + "=" + value_label
+            item_text = f"{str(key)}={value_label}"
             node_id = self.tree.insert(parent_id, "end", text=item_text, open=True)
             if node == selected_ast_node:
                 self.tree.see(node_id)
@@ -104,11 +101,11 @@ class AstView(ui_utils.TreeFrame):
                 self.tree.set(node_id, "lineno", node.lineno)
                 self.tree.set(node_id, "col_offset", node.col_offset)
 
-                range_str = str(node.lineno) + "." + str(node.col_offset)
+                range_str = f"{str(node.lineno)}.{str(node.col_offset)}"
                 if hasattr(node, "end_lineno") and hasattr(node, "end_col_offset"):
                     self.tree.set(node_id, "end_lineno", node.end_lineno)
                     self.tree.set(node_id, "end_col_offset", node.end_col_offset)
-                    range_str += "  -  " + str(node.end_lineno) + "." + str(node.end_col_offset)
+                    range_str += f"  -  {str(node.end_lineno)}.{str(node.end_col_offset)}"
                 else:
                     # fallback
                     self.tree.set(node_id, "end_lineno", node.lineno)
@@ -168,22 +165,15 @@ def pretty(node, key="/", level=0):
     if isinstance(node, ast.AST):
         fields = list(ast.iter_fields(node))
         value_label = node.__class__.__name__
-        if isinstance(node, ast.Call):
-            # Try to make 3.4 AST-s more similar to 3.5
-            if sys.version_info[:2] == (3, 4):
-                if ("kwargs", None) in fields:
-                    fields.remove(("kwargs", None))
-                if ("starargs", None) in fields:
-                    fields.remove(("starargs", None))
-
-            # TODO: translate also non-None kwargs and starargs
+        if isinstance(node, ast.Call) and sys.version_info[:2] == (3, 4):
+            if ("kwargs", None) in fields:
+                fields.remove(("kwargs", None))
+            if ("starargs", None) in fields:
+                fields.remove(("starargs", None))
 
     elif isinstance(node, list):
         fields = list(enumerate(node))
-        if len(node) == 0:
-            value_label = "[]"
-        else:
-            value_label = "[...]"
+        value_label = "[]" if len(node) == 0 else "[...]"
     else:
         fields = []
         value_label = repr(node)

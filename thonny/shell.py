@@ -55,8 +55,7 @@ _CLEAR_SHELL_DEFAULT_SEQ = select_sequence("<Control-l>", "<Command-k>")
 TERMINAL_CONTROL_REGEX_STR = r"\x1B\[[0-?]*[ -/]*[@-~]|[\a\b\r]|\x1B\].+?(?:\a|\x1B\\)"
 TERMINAL_CONTROL_REGEX = re.compile(TERMINAL_CONTROL_REGEX_STR)
 OUTPUT_SPLIT_REGEX = re.compile(
-    "(%s|%s|%s)"
-    % (TERMINAL_CONTROL_REGEX_STR, OBJECT_INFO_START_REGEX_STR, OBJECT_INFO_END_REGEX_STR)
+    f"({TERMINAL_CONTROL_REGEX_STR}|{OBJECT_INFO_START_REGEX_STR}|{OBJECT_INFO_END_REGEX_STR})"
 )
 NUMBER_SPLIT_REGEX = re.compile(r"((?<!\w)[-+]?[0-9]*\.?[0-9]+\b)")
 SIMPLE_URL_SPLIT_REGEX = re.compile(
@@ -148,7 +147,7 @@ class ShellView(tk.PanedWindow):
     def get_tab_text(self) -> str:
         result = tr("Shell")
         if self._osc_title:
-            result += " • " + replace_unsupported_chars(self._osc_title)
+            result += f" • {replace_unsupported_chars(self._osc_title)}"
         return result
 
     def set_osc_title(self, text: str) -> None:
@@ -222,9 +221,8 @@ class ShellView(tk.PanedWindow):
     def hide_plotter(self):
         if self.plotter is None or not self.plotter.winfo_ismapped():
             return
-        else:
-            self.remove(self.plotter)
-            running.io_animation_required = False
+        self.remove(self.plotter)
+        running.io_animation_required = False
 
     def set_notice(self, text):
         if text is None:
@@ -379,7 +377,6 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
 
         prompt_font = tk.font.nametofont("BoldEditorFont")
         x_padding = 4
-        welcome_vert_spacing = x_padding
         io_vert_spacing = 10
         io_indent = 16 + x_padding
         self.io_indent = io_indent
@@ -399,14 +396,14 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
         self.tag_configure("inactive_value", lmargin1=x_padding, lmargin2=x_padding)
         self.tag_configure("restart_line", wrap="none", lmargin1=x_padding, lmargin2=x_padding)
 
+        welcome_vert_spacing = x_padding
         self.tag_configure(
             "welcome",
-            lmargin1=x_padding,
-            lmargin2=x_padding,
+            lmargin1=welcome_vert_spacing,
+            lmargin2=welcome_vert_spacing,
             spacing1=welcome_vert_spacing,
             spacing3=welcome_vert_spacing,
         )
-
         # Underline on the font looks better than underline on the tag,
         # therefore Shell doesn't use configured "hyperlink" style directly
         hyperlink_opts = get_syntax_options_for_tag("hyperlink").copy()
@@ -488,8 +485,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             self._show_user_exception(msg["user_exception"])
             self._ensure_visible()
 
-        welcome_text = msg.get("welcome_text")
-        if welcome_text:
+        if welcome_text := msg.get("welcome_text"):
             preceding = self.get("output_insert -1 c", "output_insert")
             if preceding.strip() and not preceding.endswith("\n"):
                 self._insert_text_directly("\n")
@@ -609,10 +605,10 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
                 # because of an error.
                 logger.exception("Could not close object info", exc_info=e)
 
-        elif "value" in self.active_extra_tags and get_workbench().in_heap_mode():
-            # id was already printed and value should be suppressed
-            pass
-        else:
+        elif (
+            "value" not in self.active_extra_tags
+            or not get_workbench().in_heap_mode()
+        ):
             if "value" in self.active_extra_tags:
                 tags = set(self.active_extra_tags)
             else:
@@ -621,10 +617,10 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             if stream_name == "stdout" and self.tty_mode:
                 tags |= self._get_ansi_tags()
 
-            non_url_length = len(data)
-            for url_match in SIMPLE_URL_SPLIT_REGEX.finditer(data):
-                non_url_length -= url_match.end() - url_match.start()
-
+            non_url_length = len(data) - sum(
+                url_match.end() - url_match.start()
+                for url_match in SIMPLE_URL_SPLIT_REGEX.finditer(data)
+            )
             if (
                 non_url_length > self._get_squeeze_threshold()
                 and "\n" not in data
@@ -632,7 +628,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             ):
                 self._io_cursor_offset = 0  # ignore the effect of preceding \r and \b
                 actual_text = data
-                button_text = actual_text[:70] + " …"
+                button_text = f"{actual_text[:70]} …"
                 btn = tk.Label(
                     self,
                     text=button_text,
@@ -724,9 +720,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             self._io_cursor_offset = -len(line)
         else:
             self._io_cursor_offset += delta
-            if self._io_cursor_offset < -len(line):
-                # cap
-                self._io_cursor_offset = -len(line)
+            self._io_cursor_offset = max(self._io_cursor_offset, -len(line))
 
     def _reset_ansi_attributes(self):
         self._ansi_foreground = None
@@ -740,11 +734,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
 
     def _handle_osc_sequence(self, data: str) -> None:
         assert data.startswith("\x1b]") and (data.endswith("\a") or data.endswith("\x1b\\"))
-        if data.endswith("\a"):
-            inner = data[2:-1]
-        else:
-            inner = data[2:-2]
-
+        inner = data[2:-1] if data.endswith("\a") else data[2:-2]
         # https://docs.microsoft.com/en-us/windows/console/console-virtual-terminal-sequences#window-title
         if inner[:2] in ["0;", "2;"]:
             get_shell().set_osc_title(inner[2:])
@@ -849,9 +839,6 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
                         # invalid code
                         break
                     codes = codes[3:]
-            else:
-                # ignore other codes
-                pass
 
     def _get_ansi_tags(self):
         result = set()
@@ -859,31 +846,31 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
         if self._ansi_foreground:
             fg = ANSI_COLOR_NAMES[self._ansi_foreground[-1]]
             if self._ansi_intensity == "1" or self._ansi_foreground[0] == "9":
-                fg = "bright_" + fg
+                fg = f"bright_{fg}"
             elif self._ansi_intensity == "2":
-                fg = "dim_" + fg
+                fg = f"dim_{fg}"
         else:
             fg = "fore"
             if self._ansi_intensity == "1":
-                fg = "bright_" + fg
+                fg = f"bright_{fg}"
             elif self._ansi_intensity == "2":
-                fg = "dim_" + fg
+                fg = f"dim_{fg}"
 
         if self._ansi_background:
             bg = ANSI_COLOR_NAMES[self._ansi_background[-1]]
             if self._ansi_background.startswith("10"):
-                bg = "bright_" + bg
+                bg = f"bright_{bg}"
         else:
             bg = "back"
 
         if self._ansi_inverse:
-            result.add(fg + "_bg")
-            result.add(bg + "_fg")
+            result.add(f"{fg}_bg")
+            result.add(f"{bg}_fg")
         else:
             if fg != "fore":
-                result.add(fg + "_fg")
+                result.add(f"{fg}_fg")
             if bg != "back":
-                result.add(bg + "_bg")
+                result.add(f"{bg}_bg")
 
         if self._ansi_intensity == "1" and self._ansi_italic:
             result.add("intense_italic_io")
@@ -946,13 +933,13 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             and not was_running
         ):
             self._clear_content("end")
-        else:
-            if (
+        elif (
                 "restart_line" in self.tag_names("output_insert -2 chars")
                 or not self.get("1.0", "3.0").strip()
             ):
-                return
+            return
 
+        else:
             self._insert_text_directly(
                 # "\n============================== RESTART ==============================\n",
                 "\n" + "─" * 200 + "\n",
@@ -1007,12 +994,12 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
 
     def selection_is_writable(self):
         try:
-            if not self.has_selection():
-                return self._in_current_input_range(self.index("insert"))
-            else:
-                return self._in_current_input_range(
-                    self.index("sel.first")
-                ) and self._in_current_input_range(self.index("sel.last"))
+            return (
+                self._in_current_input_range(self.index("sel.first"))
+                and self._in_current_input_range(self.index("sel.last"))
+                if self.has_selection()
+                else self._in_current_input_range(self.index("insert"))
+            )
         except TclError:
             return True
 
@@ -1064,7 +1051,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
 
     def _insert_command_link(self, txt, handler):
         self._link_handler_count += 1
-        command_tag = "link_handler_%s" % self._link_handler_count
+        command_tag = f"link_handler_{self._link_handler_count}"
 
         self.direct_insert("output_insert", txt, ("io_hyperlink", command_tag))
         self.tag_bind(command_tag, "<1>", handler)
@@ -1143,11 +1130,9 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
         submittable_text = self._extract_submittable_input(input_text, tail)
 
         if submittable_text is not None:
-            if get_runner().is_waiting_toplevel_command():
-                # clean up the tail
-                if len(tail) > 0:
-                    assert tail.strip() == ""
-                    self.delete("insert", "end-1c")
+            if get_runner().is_waiting_toplevel_command() and len(tail) > 0:
+                assert tail.strip() == ""
+                self.delete("insert", "end-1c")
 
             # leftover text will be kept in widget, waiting for next request.
             start_index = self.index("input_start")
@@ -1225,9 +1210,9 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
         while len(lines) > 0 and (lines[0].strip().startswith("#") or lines[0].strip() == ""):
             lines.pop(0)
 
-        compound_keywords = ["if", "while", "for", "with", "try", "def", "class", "async", "await"]
         if len(lines) > 0:
             first_word = lines[0].strip().split()[0]
+            compound_keywords = ["if", "while", "for", "with", "try", "def", "class", "async", "await"]
             if first_word in compound_keywords and not source.replace(" ", "").replace(
                 "\t", ""
             ).endswith("\n\n"):
@@ -1255,10 +1240,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             try:
                 if cmd_line.startswith("%"):
                     parts = cmd_line.split(" ", maxsplit=1)
-                    if len(parts) == 2:
-                        args_str = parts[1].strip()
-                    else:
-                        args_str = ""
+                    args_str = parts[1].strip() if len(parts) == 2 else ""
                     argv = parse_cmd_line(cmd_line[1:])
                     command_name = argv[0]
                     cmd_args = argv[1:]
@@ -1386,10 +1368,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
             self._propose_command("")
             return "break"
 
-        if self._command_history_current_index is None:
-            self._command_history_current_index = len(self._command_history) - 1
-        else:
-            self._command_history_current_index += 1
+        self._command_history_current_index += 1
 
         self._propose_command(
             self._command_history[self._command_history_current_index].strip("\n")
@@ -1524,9 +1503,6 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
 
         # would this keep current block intact?
         next_prompt = self.tag_nextrange("prompt", proposed_cut, "end")
-        if not next_prompt:
-            pass  # TODO: disable stepping back
-
         self._clear_content(proposed_cut)
 
     def _clear_content(self, cut_idx):
@@ -1552,9 +1528,8 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
         if "value" in tags or "io_hyperlink" in tags or "stacktrace_hyperlink" in tags:
             if self.cget("cursor") != get_hyperlink_cursor():
                 self.config(cursor=get_hyperlink_cursor())
-        else:
-            if self.cget("cursor") != get_beam_cursor():
-                self.config(cursor=get_beam_cursor())
+        elif self.cget("cursor") != get_beam_cursor():
+            self.config(cursor=get_beam_cursor())
 
     def _invalidate_current_data(self):
         """
@@ -1566,16 +1541,11 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
 
         # inactivate values
         pos = end_index
-        while True:
-            rng = self.tag_prevrange("value", pos)
-            if rng:
-                rng_start, rng_end = rng
-                self.tag_remove("value", rng_start, rng_end)
-                self.tag_add("inactive_value", rng_start, rng_end)
-                pos = rng_start
-            else:
-                break
-
+        while rng := self.tag_prevrange("value", pos):
+            rng_start, rng_end = rng
+            self.tag_remove("value", rng_start, rng_end)
+            self.tag_add("inactive_value", rng_start, rng_end)
+            pos = rng_start
         self.tag_remove("value", "1.0", end_index)
 
         while len(self.active_extra_tags) > 0:
@@ -1583,7 +1553,7 @@ class BaseShellText(EnhancedTextWithLogging, SyntaxText):
 
     def get_lines_above_viewport_bottom(self, tag_name, n):
         end_index = self.index("@%d,%d lineend" % (self.winfo_height(), self.winfo_height()))
-        start_index = self.index(end_index + " -50 lines")
+        start_index = self.index(f"{end_index} -50 lines")
 
         result = ""
         while True:
@@ -1720,7 +1690,7 @@ class SqueezedTextDialog(CommonDialog):
 
     def _on_expand(self):
         index = self.shell_text.index(self.button)
-        self.shell_text.direct_delete(index, index + " +1 chars")
+        self.shell_text.direct_delete(index, f"{index} +1 chars")
         self.shell_text.direct_insert(index, self.content, tuple(self.button.tags))
         self.destroy()
 
@@ -1859,14 +1829,13 @@ class PlotterCanvas(tk.Canvas):
             if i < 1 or "stdout" not in self.text.tag_names(line_start_index):
                 data_lines.append(([], []))
             else:
-                content = self.text.get(line_start_index, line_start_index + " lineend")
+                content = self.text.get(line_start_index, f"{line_start_index} lineend")
                 data_lines.append(self.extract_pattern_and_numbers(content))
 
         # data_lines need to be transposed
         segments_by_color = []
         for i in range(100):
-            segments = list(self.extract_series_segments(data_lines, i))
-            if segments:
+            if segments := list(self.extract_series_segments(data_lines, i)):
                 segments_by_color.append(segments)
             else:
                 break

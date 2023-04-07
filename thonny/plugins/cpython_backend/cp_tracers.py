@@ -73,11 +73,7 @@ class Tracer(Executor):
         # first (automatic) stepping command depends on whether any breakpoints were set or not
         breakpoints = self._original_cmd.breakpoints
         assert isinstance(breakpoints, dict)
-        if breakpoints:
-            command_name = "resume"
-        else:
-            command_name = "step_into"
-
+        command_name = "resume" if breakpoints else "step_into"
         self._current_command = DebuggerCommand(
             command_name,
             state=None,
@@ -188,7 +184,7 @@ class Tracer(Executor):
 
     def _initialize_new_command(self, current_frame):
         self._command_completion_handler = getattr(
-            self, "_cmd_%s_completed" % self._current_command.name
+            self, f"_cmd_{self._current_command.name}_completed"
         )
 
         if self._current_command.breakpoints != self._prev_breakpoints:
@@ -481,17 +477,15 @@ class NiceTracer(Tracer):
         if code is None:
             return True
 
-        if event == "call":
-            # new frames
-            if code.co_name in self.marker_function_names:
-                return False
-
-            else:
-                return not self._is_interesting_frame(frame) or self._backend.is_doing_io()
+        if (
+            event == "call"
+            and code.co_name in self.marker_function_names
+            or event != "call"
+        ):
+            return False
 
         else:
-            # once we have entered a frame, we need to reach the return event
-            return False
+            return not self._is_interesting_frame(frame) or self._backend.is_doing_io()
 
     def _is_interesting_frame(self, frame):
         return (
@@ -503,15 +497,14 @@ class NiceTracer(Tracer):
         spec = PathFinder.find_spec(fullname, path, target)
 
         if (
-            spec is not None
-            and isinstance(spec.loader, SourceFileLoader)
-            and getattr(spec, "origin", None)
-            and self._is_interesting_module_file(spec.origin)
+            spec is None
+            or not isinstance(spec.loader, SourceFileLoader)
+            or not getattr(spec, "origin", None)
+            or not self._is_interesting_module_file(spec.origin)
         ):
-            spec.loader = FancySourceFileLoader(fullname, spec.origin, self)
-            return spec
-        else:
             return super().find_spec(fullname, path, target)
+        spec.loader = FancySourceFileLoader(fullname, spec.origin, self)
+        return spec
 
     def is_in_past(self):
         return self._current_state_index < len(self._saved_states) - 1
@@ -612,9 +605,6 @@ class NiceTracer(Tracer):
                     # There may be more events coming from upper (system) frames
                     # but we're not interested in those
                     sys.settrace(None)
-            else:
-                pass
-
         else:
             self._fresh_exception = None
 
@@ -650,10 +640,7 @@ class NiceTracer(Tracer):
         if "statement" in event:
             custom_frame.current_statement = focus
 
-            if event == "before_statement_again":
-                # keep the expression information from last event
-                pass
-            else:
+            if event != "before_statement_again":
                 custom_frame.current_root_expression = None
                 custom_frame.current_evaluations = []
         else:
@@ -739,22 +726,17 @@ class NiceTracer(Tracer):
             frame = self._create_actual_active_frame(state)
 
             # Is this state meant to be seen?
-            if "skip_" + frame.event not in frame.node_tags:
+            if f"skip_{frame.event}" not in frame.node_tags:
                 # if True:
                 # Has the command completed?
-                tester = getattr(self, "_cmd_" + self._current_command.name + "_completed")
-                cmd_complete = tester(frame, self._current_command)
-
-                if cmd_complete:
+                tester = getattr(self, f"_cmd_{self._current_command.name}_completed")
+                if cmd_complete := tester(frame, self._current_command):
                     state["in_client_log"] = True
                     self._report_state(self._current_state_index)
                     self._fetch_next_debugger_command(frame)
 
             if self._current_command.name == "step_back":
-                if self._current_state_index == 0:
-                    # Already in first state. Remain in this loop
-                    pass
-                else:
+                if self._current_state_index != 0:
                     assert self._current_state_index > 0
                     # Current event is no longer present in GUI "undo log"
                     self._saved_states[self._current_state_index]["in_client_log"] = False
@@ -800,7 +782,7 @@ class NiceTracer(Tracer):
 
             source, firstlineno, in_library = self._backend._get_frame_source_info(system_frame)
 
-            assert firstlineno is not None, "nofir " + str(system_frame)
+            assert firstlineno is not None, f"nofir {str(system_frame)}"
             frame_id = id(system_frame)
             new_stack.append(
                 FrameInfo(
@@ -969,11 +951,7 @@ class NiceTracer(Tracer):
         )
 
     def _frame_is_alive(self, frame_id):
-        for frame in self._custom_stack:
-            if id(frame.system_frame) == frame_id:
-                return True
-
-        return False
+        return any(id(frame.system_frame) == frame_id for frame in self._custom_stack)
 
     def _export_stack(self):
         result = []
@@ -1049,7 +1027,7 @@ class NiceTracer(Tracer):
         def add_tag(node, tag):
             if not hasattr(node, "tags"):
                 node.tags = set()
-                node.tags.add("class=" + node.__class__.__name__)
+                node.tags.add(f"class={node.__class__.__name__}")
             node.tags.add(tag)
 
         # ignore module docstring if it is before from __future__ import
@@ -1076,7 +1054,7 @@ class NiceTracer(Tracer):
             last_child = ast_utils.get_last_child(node)
             assert last_child in [True, False, None] or isinstance(
                 last_child, (ast.expr, ast.stmt, type(None))
-            ), ("Bad last child " + str(last_child) + " of " + str(node))
+            ), f"Bad last child {str(last_child)} of {str(node)}"
             if last_child is not None:
                 add_tag(node, "has_children")
 
@@ -1366,47 +1344,52 @@ class NiceTracer(Tracer):
         """
         tracer = self
 
+
+
         class ExpressionVisitor(ast.NodeTransformer):
             def generic_visit(self, node):
-                if isinstance(node, _ast.expr):
-                    if isinstance(node, ast.Starred):
-                        # keep this node as is, but instrument its children
-                        return ast.NodeTransformer.generic_visit(self, node)
-                    elif tracer._should_instrument_as_expression(node):
-                        # before marker
-                        before_marker = tracer._create_simple_marker_call(
-                            node, BEFORE_EXPRESSION_MARKER
-                        )
-                        ast.copy_location(before_marker, node)
-
-                        if "ignore_children" in node.tags:
-                            transformed_node = node
-                        else:
-                            transformed_node = ast.NodeTransformer.generic_visit(self, node)
-
-                        # after marker
-                        after_marker = ast.Call(
-                            func=ast.Name(id=AFTER_EXPRESSION_MARKER, ctx=ast.Load()),
-                            args=[before_marker, transformed_node],
-                            keywords=[],
-                        )
-                        ast.copy_location(after_marker, node)
-                        ast.fix_missing_locations(after_marker)
-                        # further transformations may query original node location from after marker
-                        if hasattr(node, "end_lineno"):
-                            after_marker.end_lineno = node.end_lineno
-                            after_marker.end_col_offset = node.end_col_offset
-
-                        return after_marker
-                    else:
-                        # This expression (and its children) should be ignored
-                        return node
-                elif tracer._is_case_pattern(node):
-                    # ignore this and children
-                    return node
-                else:
-                    # Descend into statements
+                if (
+                    isinstance(node, _ast.expr)
+                    and isinstance(node, ast.Starred)
+                    or not isinstance(node, _ast.expr)
+                    and not tracer._is_case_pattern(node)
+                ):
+                    # keep this node as is, but instrument its children
                     return ast.NodeTransformer.generic_visit(self, node)
+                elif (
+                    isinstance(node, _ast.expr)
+                    and not isinstance(node, ast.Starred)
+                    and tracer._should_instrument_as_expression(node)
+                ):
+                    # before marker
+                    before_marker = tracer._create_simple_marker_call(
+                        node, BEFORE_EXPRESSION_MARKER
+                    )
+                    ast.copy_location(before_marker, node)
+
+                    if "ignore_children" in node.tags:
+                        transformed_node = node
+                    else:
+                        transformed_node = ast.NodeTransformer.generic_visit(self, node)
+
+                    # after marker
+                    after_marker = ast.Call(
+                        func=ast.Name(id=AFTER_EXPRESSION_MARKER, ctx=ast.Load()),
+                        args=[before_marker, transformed_node],
+                        keywords=[],
+                    )
+                    ast.copy_location(after_marker, node)
+                    ast.fix_missing_locations(after_marker)
+                    # further transformations may query original node location from after marker
+                    if hasattr(node, "end_lineno"):
+                        after_marker.end_lineno = node.end_lineno
+                        after_marker.end_col_offset = node.end_col_offset
+
+                    return after_marker
+                else:
+                    # This expression (and its children) should be ignored
+                    return node
+
 
         return ExpressionVisitor().visit(node)
 
@@ -1422,7 +1405,7 @@ class NiceTracer(Tracer):
         return ast.Num(node_id)
 
     def _debug(self, *args):
-        logger.debug("TRACER: " + str(args))
+        logger.debug(f"TRACER: {args}")
 
     def _execute_prepared_user_code(self, statements, global_vars):
         try:

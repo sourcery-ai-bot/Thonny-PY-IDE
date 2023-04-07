@@ -73,16 +73,12 @@ class PylintAnalyzer(SubprocessProgramAnalyzer):
         )
 
     def _parse_and_output_warnings(self, pylint_proc, out_lines, err_lines):
-        # print("COMPL", out, err)
-        # get rid of non-error
-        err = (
+        if err := (
             "".join(err_lines)
             .replace("No config file found, using default configuration", "")
             .strip()
-        )
-
-        if err:
-            logger.error("Pylint: " + err)
+        ):
+            logger.error(f"Pylint: {err}")
 
         warnings = []
         for line in out_lines:
@@ -111,11 +107,7 @@ class PylintAnalyzer(SubprocessProgramAnalyzer):
                     continue
 
                 check = checks_by_id[atts["msg_id"]]
-                if check.get("tho_xpln"):
-                    explanation = check["tho_xpln"]
-                else:
-                    explanation = check["msg_xpln"]
-
+                explanation = check["tho_xpln"] if check.get("tho_xpln") else check["msg_xpln"]
                 if explanation.startswith("Used when an "):
                     explanation = "It looks like the " + explanation[(len("Used when an ")) :]
                 elif explanation.startswith("Emitted when an "):

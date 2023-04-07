@@ -12,10 +12,10 @@ def scale(value) -> float:
 
 
 def _treeview_settings() -> BasicUiThemeSettings:
-    light_blue = "#ADD8E6"
     light_grey = "#D3D3D3"
 
     if running_on_linux() or running_on_mac_os():
+        light_blue = "#ADD8E6"
         bg_sel_focus = light_blue
         fg_sel_focus = "black"
         fg_sel_notfocus = "black"

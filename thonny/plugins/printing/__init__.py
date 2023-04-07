@@ -55,10 +55,10 @@ def can_print_current_script():
 
 def _export_text_as_html(text):
     last_line = int(float(text.index("end-1c")))
-    result = ""
-    for i in range(1, last_line + 1):
-        result += "<code>" + _export_line_as_html(text, i) + "</code>\n"
-    return result
+    return "".join(
+        f"<code>{_export_line_as_html(text, i)}" + "</code>\n"
+        for i in range(1, last_line + 1)
+    )
 
 
 def _export_line_as_html(text, lineno):
@@ -72,15 +72,12 @@ def _export_line_as_html(text, lineno):
         else:
             parts[-1][0] += s[i]
 
-    # print(lineno, parts)
-    result = ""
-    for s, tags in parts:
-        if tags:
-            result += "<span class='%s'>%s</span>" % (" ".join(tags), escape_html(s))
-        else:
-            result += escape_html(s)
-
-    return result
+    return "".join(
+        f"""<span class='{" ".join(tags)}'>{escape_html(s)}</span>"""
+        if tags
+        else escape_html(s)
+        for s, tags in parts
+    )
 
 
 def escape_html(s):

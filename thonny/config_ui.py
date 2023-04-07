@@ -86,7 +86,7 @@ class ConfigurationDialog(CommonDialog):
                 if page.apply() is False:
                     return
             except Exception:
-                get_workbench().report_exception("Error when applying options in " + title)
+                get_workbench().report_exception(f"Error when applying options in {title}")
 
         self.destroy()
 
@@ -95,7 +95,7 @@ class ConfigurationDialog(CommonDialog):
             try:
                 page.cancel()
             except Exception:
-                get_workbench().report_exception("Error when cancelling options in " + title)
+                get_workbench().report_exception(f"Error when cancelling options in {title}")
 
         self.destroy()
 

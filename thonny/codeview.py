@@ -90,10 +90,9 @@ class SyntaxText(EnhancedText):
     def perform_smart_backspace(self, event):
         if self.file_type == "python":
             return EnhancedText.perform_smart_backspace(self, event)
-        else:
-            self._log_keypress_for_undo(event)
-            # let the default action work
-            return
+        self._log_keypress_for_undo(event)
+        # let the default action work
+        return
 
     def should_indent_with_tabs(self):
         return get_workbench().get_option("edit.indent_with_tabs")
@@ -192,7 +191,9 @@ class CodeView(tktextext.EnhancedTextFrame):
             return enc
         except LookupError:
             messagebox.showerror(
-                "Error", "Unknown encoding '%s'. Using utf-8 instead" % enc, master=self
+                "Error",
+                f"Unknown encoding '{enc}'. Using utf-8 instead",
+                master=self,
             )
             return "utf-8"
 
@@ -210,8 +211,8 @@ class CodeView(tktextext.EnhancedTextFrame):
 
             for line in data[:1024].splitlines():
                 match = ENCODING_MARKER.search(line)
-                if match and len(match.group(2)) > 2:
-                    return match.group(2).decode("ascii", errors="replace")
+                if match and len(match[2]) > 2:
+                    return match[2].decode("ascii", errors="replace")
 
             return "UTF-8"
 
@@ -257,11 +258,7 @@ class CodeView(tktextext.EnhancedTextFrame):
         if not chars:
             return True
 
-        non_text_char_count = 0
-        for ch in chars:
-            if ch in NON_TEXT_CHARS:
-                non_text_char_count += 1
-
+        non_text_char_count = sum(ch in NON_TEXT_CHARS for ch in chars)
         return non_text_char_count / len(chars) < 0.01
 
     def set_content(self, content, keep_undo=False):
@@ -289,8 +286,8 @@ class CodeView(tktextext.EnhancedTextFrame):
             # it was probably a drag
             return
 
-        start_index = index + " linestart"
-        end_index = index + " lineend"
+        start_index = f"{index} linestart"
+        end_index = f"{index} lineend"
 
         if self.text.tag_nextrange("breakpoint_line", start_index, end_index):
             self.text.tag_remove("breakpoint_line", start_index, end_index)
@@ -314,14 +311,16 @@ class CodeView(tktextext.EnhancedTextFrame):
 
     def compute_gutter_line(self, lineno, plain=False):
         if plain:
-            yield str(lineno) + " ", ()
+            yield (f"{str(lineno)} ", ())
         else:
             visual_line_number = self._first_line_number + lineno - 1
-            linestart = str(visual_line_number) + ".0"
+            linestart = f"{str(visual_line_number)}.0"
 
             yield str(lineno), ()
 
-            if self.text.tag_nextrange("breakpoint_line", linestart, linestart + " lineend"):
+            if self.text.tag_nextrange(
+                "breakpoint_line", linestart, f"{linestart} lineend"
+            ):
                 yield BREAKPOINT_SYMBOL, ("breakpoint",)
             else:
                 yield " ", ()
@@ -332,17 +331,11 @@ class CodeView(tktextext.EnhancedTextFrame):
         if text_range:
             if isinstance(text_range, int):
                 # it's line number
-                start = str(text_range - self._first_line_number + 1) + ".0"
-                end = str(text_range - self._first_line_number + 1) + ".end"
+                start = f"{str(text_range - self._first_line_number + 1)}.0"
+                end = f"{str(text_range - self._first_line_number + 1)}.end"
             elif isinstance(text_range, TextRange):
-                start = "%s.%s" % (
-                    text_range.lineno - self._first_line_number + 1,
-                    text_range.col_offset,
-                )
-                end = "%s.%s" % (
-                    text_range.end_lineno - self._first_line_number + 1,
-                    text_range.end_col_offset,
-                )
+                start = f"{text_range.lineno - self._first_line_number + 1}.{text_range.col_offset}"
+                end = f"{text_range.end_lineno - self._first_line_number + 1}.{text_range.end_col_offset}"
             else:
                 assert isinstance(text_range, tuple)
                 start, end = text_range
@@ -350,14 +343,14 @@ class CodeView(tktextext.EnhancedTextFrame):
             self.text.tag_add("sel", start, end)
             if isinstance(text_range, int):
                 self.text.mark_set("insert", end)
-            self.text.see("%s -1 lines" % start)
+            self.text.see(f"{start} -1 lines")
 
     def get_breakpoint_line_numbers(self):
-        result = set()
-        for num_line in self._gutter.get("1.0", "end").splitlines():
-            if BREAKPOINT_SYMBOL in num_line:
-                result.add(int(num_line.replace(BREAKPOINT_SYMBOL, "")))
-        return result
+        return {
+            int(num_line.replace(BREAKPOINT_SYMBOL, ""))
+            for num_line in self._gutter.get("1.0", "end").splitlines()
+            if BREAKPOINT_SYMBOL in num_line
+        }
 
     def get_selected_range(self):
         if self.text.has_selection():
@@ -403,7 +396,7 @@ def set_syntax_options(syntax_options):
 def get_syntax_options_for_tag(tag, **base_options):
     global _syntax_options
     if tag in _syntax_options:
-        base_options.update(_syntax_options[tag])
+        base_options |= _syntax_options[tag]
     return base_options
 
 
@@ -452,7 +445,7 @@ def perform_python_return(text: EnhancedText, event):
         i = 0
         n = len(left_part)
         while i < n and left_part[i] in " \t":
-            i = i + 1
+            i += 1
 
         # is it only whitespace?
         if i == n:
@@ -479,7 +472,7 @@ def perform_python_return(text: EnhancedText, event):
 
         for context in roughparse.NUM_CONTEXT_LINES:
             startat = max(lno - context, 1)
-            startatindex = repr(startat) + ".0"
+            startatindex = f"{repr(startat)}.0"
             rawtext = text.get(startatindex, "insert")
             y.set_str(rawtext)
             bod = y.find_good_parse_start(
@@ -558,7 +551,7 @@ def perform_simple_return(text: EnhancedText, event):
         i = 0
         n = len(left_part)
         while i < n and left_part[i] in " \t":
-            i = i + 1
+            i += 1
 
         # start the new line with the same whitespace
         text.insert("insert", "\n" + left_part[:i])

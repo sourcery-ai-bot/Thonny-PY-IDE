@@ -38,9 +38,8 @@ class CalltipBox(DocuBoxBase):
 
         self.text["height"] = 3
 
-        expected_height = 10  # TODO
-        pos = signatures[0].call_bracket_start
-        if pos:
+        if pos := signatures[0].call_bracket_start:
+            expected_height = 10  # TODO
             self._show_on_target_text(
                 "%d.%d" % pos,
                 expected_height,
@@ -83,10 +82,10 @@ class Calltipper:
         get_workbench().bind_class("ShellText", "<Key>", self._on_text_key, True)
 
     def request_calltip(self) -> None:
-        text = get_active_text_widget()
-        if not text:
+        if text := get_active_text_widget():
+            self.request_calltip_for_text(text)
+        else:
             return
-        self.request_calltip_for_text(text)
 
     def request_calltip_for_text(self, text: SyntaxText) -> None:
         source, row, column = editor_helpers.get_relevant_source_and_cursor_position(text)

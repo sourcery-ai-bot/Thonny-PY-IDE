@@ -91,11 +91,7 @@ class FilesView(tk.PanedWindow):
     def restore_split(self):
         split = get_workbench().get_option("view.files_split", None)
         if split is None:
-            if self.winfo_height() > 5:
-                split = int(self.winfo_height() * 0.66)
-            else:
-                split = 600
-
+            split = int(self.winfo_height() * 0.66) if self.winfo_height() > 5 else 600
         self.sash_place(0, 0, split)
 
     def on_backend_restart(self, event):
@@ -113,10 +109,7 @@ class FilesView(tk.PanedWindow):
         return self.local_files.get_active_directory()
 
     def get_active_remote_dir(self):
-        if self.remote_added:
-            return self.remote_files.get_active_directory()
-        else:
-            return None
+        return self.remote_files.get_active_directory() if self.remote_added else None
 
     def destroy(self):
         get_workbench().unbind("BackendTerminated", self.on_backend_terminate)
@@ -141,18 +134,17 @@ class ActiveLocalFileBrowser(BaseLocalFileBrowser):
     def get_proposed_new_file_name(self, folder, extension):
         base = "new_file"
 
-        if os.path.exists(os.path.join(folder, base + extension)):
-            i = 2
-
-            while True:
-                name = base + "_" + str(i) + extension
-                path = os.path.join(folder, name)
-                if os.path.exists(path):
-                    i += 1
-                else:
-                    return name
-        else:
+        if not os.path.exists(os.path.join(folder, base + extension)):
             return base + extension
+        i = 2
+
+        while True:
+            name = f"{base}_{str(i)}{extension}"
+            path = os.path.join(folder, name)
+            if os.path.exists(path):
+                i += 1
+            else:
+                return name
 
     def request_focus_into(self, path):
         if path == "":
@@ -195,11 +187,11 @@ class ActiveLocalFileBrowser(BaseLocalFileBrowser):
 
         proxy = get_runner().get_backend_proxy()
 
-        if not proxy.supports_remote_directories():
-            target_dir_desc = proxy.get_node_label()
-        else:
-            target_dir_desc = target_dir
-
+        target_dir_desc = (
+            target_dir
+            if proxy.supports_remote_directories()
+            else proxy.get_node_label()
+        )
         def _upload():
             selection = self.get_selection_info(True)
             if not selection:
@@ -241,9 +233,8 @@ class ActiveLocalFileBrowser(BaseLocalFileBrowser):
                     cfgfile = os.path.join(path, CFGFILE)
                     if os.path.exists(cfgfile) and os.path.isfile(cfgfile):
                         return path
-                else:
-                    if fnam == CFGFILE:
-                        return os.path.dirname(path)
+                elif fnam == CFGFILE:
+                    return os.path.dirname(path)
         except Exception as ex:
             logger.error("_get_venv_path", ex)
 
@@ -388,13 +379,14 @@ class UploadDialog(TransferDialog):
         super(UploadDialog, self).__init__(master, cmd, "Uploading")
 
     def _confirm_and_start_main_work(self, preparation_response):
-        picked_items = list(
+        if picked_items := list(
             sorted(
-                pick_transfer_items(self.items, preparation_response["existing_items"], self),
+                pick_transfer_items(
+                    self.items, preparation_response["existing_items"], self
+                ),
                 key=lambda x: x["target_path"],
             )
-        )
-        if picked_items:
+        ):
             backend_name = get_runner().get_backend_proxy().get_backend_name()
             self._cmd = InlineCommand(
                 "upload",
@@ -464,8 +456,9 @@ class DownloadDialog(TransferDialog):
             preparation_response["all_items"], self._target_dir
         )
         existing_target_items = self._get_existing_target_items(prepared_items)
-        picked_items = pick_transfer_items(prepared_items, existing_target_items, self)
-        if picked_items:
+        if picked_items := pick_transfer_items(
+            prepared_items, existing_target_items, self
+        ):
             self._cmd = InlineCommand("download", items=picked_items)
             get_runner().send_command(self._cmd)
             return True
@@ -504,25 +497,18 @@ def pick_transfer_items(
             target_info = existing_target_items[item["target_path"]]
             if item["kind"] != target_info["kind"]:
                 errors.append(
-                    "Can't overwrite '%s' with '%s', because former is a %s but latter is a %s"
-                    % (item["target_path"], item["source_path"], target_info["kind"], item["kind"])
+                    f"""Can't overwrite '{item["target_path"]}' with '{item["source_path"]}', because former is a {target_info["kind"]} but latter is a {item["kind"]}"""
                 )
             elif item["kind"] == "file":
                 size_diff = item["size"] - target_info["size"]
                 if size_diff > 0:
-                    replacement = "a larger file (%s + %s)" % (
-                        sizeof_fmt(target_info["size"]),
-                        sizeof_fmt(size_diff),
-                    )
+                    replacement = f'a larger file ({sizeof_fmt(target_info["size"])} + {sizeof_fmt(size_diff)})'
                 elif size_diff < 0:
-                    replacement = "a smaller file (%s - %s)" % (
-                        sizeof_fmt(target_info["size"]),
-                        sizeof_fmt(-size_diff),
-                    )
+                    replacement = f'a smaller file ({sizeof_fmt(target_info["size"])} - {sizeof_fmt(-size_diff)})'
                 else:
-                    replacement = "a file of same size (%s)" % sizeof_fmt(target_info["size"])
+                    replacement = f'a file of same size ({sizeof_fmt(target_info["size"])})'
 
-                overwrites.append("'%s' with %s" % (item["target_path"], replacement))
+                overwrites.append(f"""'{item["target_path"]}' with {replacement}""")
 
     if errors:
         showerror("Error", format_items(errors), master=master)
@@ -591,12 +577,8 @@ def prepare_upload_items(
 
 
 def get_transfer_description(verb, paths, target_dir):
-    if len(paths) == 1:
-        subject = "'%s'" % paths[0]
-    else:
-        subject = "%d items" % len(paths)
-
-    return "%s %s to %s" % (verb, subject, target_dir)
+    subject = f"'{paths[0]}'" if len(paths) == 1 else "%d items" % len(paths)
+    return f"{verb} {subject} to {target_dir}"
 
 
 def load_plugin() -> None:

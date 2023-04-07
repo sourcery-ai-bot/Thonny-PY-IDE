@@ -391,7 +391,7 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
 
         val = self._evaluate(script)
         if isinstance(val, str):
-            print("WARNING: Could not sync device's clock: " + val)
+            print(f"WARNING: Could not sync device's clock: {val}")
 
     def _get_utc_timetuple_from_device(self) -> Union[tuple, str]:
         if self._using_microbit_micropython():
@@ -432,8 +432,7 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
             % indent(specific_script, "    ")
         )
 
-        val = self._evaluate(script)
-        return val
+        return self._evaluate(script)
 
     def _get_actual_time_tuple_on_device(self):
         script = dedent(
@@ -502,9 +501,9 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
         logger.info("Requesting normal mode at %r", self._last_prompt)
         self._write(NORMAL_MODE_CMD)
         self._log_output_until_active_prompt()
-        assert self._last_prompt == NORMAL_PROMPT, (
-            "Could not get normal prompt, got %s" % self._last_prompt
-        )
+        assert (
+            self._last_prompt == NORMAL_PROMPT
+        ), f"Could not get normal prompt, got {self._last_prompt}"
 
     def _clear_repl(self):
         """NB! assumes prompt and may be called without __thonny_helper"""
@@ -589,18 +588,18 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
             while True:
                 expected_echo = block.replace(b"\r\n", b"\r\n" + PASTE_MODE_LINE_PREFIX)
                 if (
-                    len(expected_echo) > self._write_block_size
-                    or block.endswith(b"\r")
-                    or len(block) > 2
-                    and starts_with_continuation_byte(script_bytes)
+                    len(expected_echo) <= self._write_block_size
+                    and not block.endswith(b"\r")
+                    and (
+                        len(block) <= 2
+                        or not starts_with_continuation_byte(script_bytes)
+                    )
                 ):
-                    # move last byte to the next block
-                    script_bytes = block[-1:] + script_bytes
-                    block = block[:-1]
-                    continue
-                else:
                     break
 
+                # move last byte to the next block
+                script_bytes = block[-1:] + script_bytes
+                block = block[:-1]
             self._write(block)
             self._connection.read_all_expected(expected_echo, timeout=WAIT_OR_CRASH_TIMEOUT)
 
@@ -794,11 +793,7 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
         start_time = time.time()
         num_interrupts_before = self._number_of_interrupts_sent
 
-        if interrupt_times:
-            interrupt_times_left = interrupt_times.copy()
-        else:
-            interrupt_times_left = []
-
+        interrupt_times_left = interrupt_times.copy() if interrupt_times else []
         # Don't want to block on lone EOT (the first EOT), because finding the second EOT
         # together with raw prompt marker is the most important.
         INCREMENTAL_OUTPUT_BLOCK_CLOSERS = re.compile(
@@ -826,7 +821,7 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
             if (
                 advice_delay is not None
                 and not have_given_advice
-                and not "Ctrl-C" in self._last_sent_output  # CircuitPython's advice
+                and "Ctrl-C" not in self._last_sent_output
                 and (
                     not have_read_non_whitespace
                     and spent_time > advice_delay
@@ -934,8 +929,7 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
                         for potential_prompt in prompts:
                             if pending.endswith(potential_prompt):
                                 pending = pending[: -len(potential_prompt)]
-                        else:
-                            break
+                        break
                     output_consumer(self._decode(pending), stream_name)
                     self._last_prompt = current_prompt
                     logger.debug("Found prompt %r", current_prompt)
@@ -948,24 +942,14 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
                 ):
                     pending += self._connection.soft_read(1)
                     self._connection.unread(pending)
-                    pending = b""
                 else:
                     output_consumer(self._decode(pending), stream_name)
-                    pending = b""
+                pending = b""
                 continue
 
             for potential_prompt in prompts:
                 if ends_overlap(pending, potential_prompt):
-                    # Maybe we have a prefix of the prompt and the rest is still coming?
-                    # (it's OK to wait a bit, as the user output usually ends with a newline, ie not
-                    # with a prompt prefix)
-                    follow_up = self._connection.soft_read(1, timeout=0.3)
-                    if not follow_up:
-                        # most likely not a Python prompt, let's forget about it
-                        output_consumer(self._decode(pending), stream_name)
-                        pending = b""
-                        continue
-                    else:
+                    if follow_up := self._connection.soft_read(1, timeout=0.3):
                         # Let's try the possible prefix again in the next iteration
                         # (I'm unreading otherwise the read_until won't see the whole prompt
                         # and needs to wait for the timeout)
@@ -976,12 +960,14 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
                         self._connection.unread(try_again + follow_up)
                         continue
 
-            else:
-                # No prompt in sight.
-                # Output and keep working.
-                output_consumer(self._decode(pending), stream_name)
-                pending = b""
-                continue
+                    else:
+                        # most likely not a Python prompt, let's forget about it
+                        output_consumer(self._decode(pending), stream_name)
+                        pending = b""
+            # No prompt in sight.
+            # Output and keep working.
+            output_consumer(self._decode(pending), stream_name)
+            pending = b""
 
     def _capture_output_until_active_prompt(self):
         output = {"stdout": "", "stderr": ""}
@@ -1012,17 +998,11 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
 
     def _forward_unexpected_output(self, stream_name="stdout"):
         "Invoked between commands"
-        # TODO: This should be as careful as _forward_output_until_active_prompt
-        data = self._connection.read_all(check_error=False)
-        if data:
+        if data := self._connection.read_all(check_error=False):
             met_prompt = False
             while data.endswith(NORMAL_PROMPT) or data.endswith(FIRST_RAW_PROMPT):
                 # looks like the device was resetted
-                if data.endswith(NORMAL_PROMPT):
-                    prompt = NORMAL_PROMPT
-                else:
-                    prompt = FIRST_RAW_PROMPT
-
+                prompt = NORMAL_PROMPT if data.endswith(NORMAL_PROMPT) else FIRST_RAW_PROMPT
                 met_prompt = True
                 self._last_prompt = prompt
 
@@ -1066,25 +1046,8 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
         return {"returncode": returncode}
 
     def _cmd_get_fs_info(self, cmd):
-        if self._using_microbit_micropython():
-            used = self._evaluate(
-                dedent(
-                    """
-                    __thonny_helper.print_mgmt_value(
-                        __thonny_helper.builtins.sum([__thonny_helper.os.size(name) for name in __thonny_helper.os.listdir()])
-                    )  
-                    """
-                )
-            )
-            return {
-                "total": None,
-                "used": used,
-                "free": None,
-                "comment": "Assuming around 30 kB of storage space for user files.",
-            }
-
-        else:
-            result = self._evaluate(
+        if not self._using_microbit_micropython():
+            return self._evaluate(
                 dedent(
                     """
                 __thonny_stat = __thonny_helper.os.statvfs(%r)
@@ -1104,8 +1067,21 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
                 )
                 % cmd.path
             )
-
-            return result
+        used = self._evaluate(
+            dedent(
+                """
+                    __thonny_helper.print_mgmt_value(
+                        __thonny_helper.builtins.sum([__thonny_helper.os.size(name) for name in __thonny_helper.os.listdir()])
+                    )  
+                    """
+            )
+        )
+        return {
+            "total": None,
+            "used": used,
+            "free": None,
+            "comment": "Assuming around 30 kB of storage space for user files.",
+        }
 
     def _cmd_upload(self, cmd):
         self._check_sync_time()
@@ -1201,10 +1177,12 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
             callback(num_bytes_read, file_size)
             if hex_mode:
                 block = binascii.unhexlify(
-                    self._evaluate("__temp_hexlify(__thonny_fp.read(%s))" % block_size)
+                    self._evaluate(
+                        f"__temp_hexlify(__thonny_fp.read({block_size}))"
+                    )
                 )
             else:
-                block = self._evaluate("__thonny_fp.read(%s)" % block_size)
+                block = self._evaluate(f"__thonny_fp.read({block_size})")
 
             if block:
                 target_fp.write(block)
@@ -1398,10 +1376,7 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
             block = source_fp.read(block_size)
 
             if block:
-                if hex_mode:
-                    script = "__W(%r)" % binascii.hexlify(block)
-                else:
-                    script = "__W(%r)" % block
+                script = "__W(%r)" % binascii.hexlify(block) if hex_mode else "__W(%r)" % block
                 out, err = self._execute(script, capture_output=True)
                 if out or err:
                     self._show_error(
@@ -1517,7 +1492,7 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
 
     def _makedirs_via_mount(self, path):
         mounted_path = self._internal_path_to_mounted_path(path)
-        assert mounted_path is not None, "Couldn't find mounted path for " + path
+        assert mounted_path is not None, f"Couldn't find mounted path for {path}"
         os.makedirs(mounted_path, exist_ok=True)
         self._sync_local_filesystem()
 
@@ -1609,9 +1584,9 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
                 skip_letters="A",
             )
             if len(candidates) == 0:
-                raise RuntimeError("Could not find volume " + self._get_fs_mount_label())
+                raise RuntimeError(f"Could not find volume {self._get_fs_mount_label()}")
             elif len(candidates) > 1:
-                raise RuntimeError("Found several possible mount points: %s" % candidates)
+                raise RuntimeError(f"Found several possible mount points: {candidates}")
             else:
                 self._last_inferred_fs_mount = candidates[0]
 
@@ -1621,11 +1596,7 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
         if "binascii" not in self._builtin_modules and "ubinascii" not in self._builtin_modules:
             return False
 
-        for ext in (".py", ".txt", ".csv"):
-            if path.lower().endswith(ext):
-                return False
-
-        return True
+        return not any(path.lower().endswith(ext) for ext in (".py", ".txt", ".csv"))
 
     def _is_connected(self):
         return self._connection._error is None
@@ -1639,10 +1610,7 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
             return Y2000_EPOCH_OFFSET
 
     def _get_sep(self):
-        if self._supports_directories():
-            return "/"
-        else:
-            return ""
+        return "/" if self._supports_directories() else ""
 
     def _decode(self, data: bytes) -> str:
         return data.decode(ENCODING, errors="replace")
@@ -1650,10 +1618,7 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
     def _get_file_operation_block_size(self):
         # don't forget that the size may be expanded up to 4x where converted to Python
         # bytes literal
-        if self._using_microbit_micropython():
-            return 512
-        else:
-            return 1024
+        return 512 if self._using_microbit_micropython() else 1024
 
     def _extract_block_without_splitting_chars(self, source_bytes: bytes) -> bytes:
         i = self._write_block_size
@@ -1666,16 +1631,15 @@ class BareMetalMicroPythonBackend(MicroPythonBackend, UploadDownloadMixin):
         return False
 
     def _create_pipkin_adapter(self):
+        kwargs = {}
         if self._connected_over_webrepl():
             from pipkin.bare_metal import WebReplAdapter
 
             class_ = WebReplAdapter
-            kwargs = {}
         else:
             from pipkin.bare_metal import SerialPortAdapter
 
             class_ = SerialPortAdapter
-            kwargs = {}
             if self._connected_to_circuitpython():
                 try:
                     kwargs["mount_path"] = self._get_fs_mount()

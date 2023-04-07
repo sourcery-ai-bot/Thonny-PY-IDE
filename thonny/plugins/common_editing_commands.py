@@ -8,10 +8,7 @@ def load_plugin() -> None:
     def create_edit_command_handler(virtual_event_sequence):
         def handler(event=None):
             widget = get_workbench().focus_get()
-            if widget:
-                return widget.event_generate(virtual_event_sequence)
-
-            return None
+            return widget.event_generate(virtual_event_sequence) if widget else None
 
         return handler
 

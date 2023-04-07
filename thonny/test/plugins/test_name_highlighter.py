@@ -91,7 +91,7 @@ def test_all():
         or jedi.__version__.startswith("0.15.")
         or jedi.__version__.startswith("0.16.")
     ):
-        warnings.warn("Skipping name matcher tests for Jedi " + jedi.__version__)
+        warnings.warn(f"Skipping name matcher tests for Jedi {jedi.__version__}")
         return
 
     for i, test in enumerate(TEST_GROUPS):

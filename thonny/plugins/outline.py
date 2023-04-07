@@ -79,20 +79,17 @@ class OutlineView(ttk.Frame):
         root_node = (None, 0, [], None, None, None)  # name, type and linenumber not needed for root
         active_node = root_node
 
-        lineno = 0
-        for line in source.split("\n"):
-            lineno += 1
-            m = re.match(r"[ ]*[\w]{1}", line)
-            if m:
-                indent = len(m.group(0))
+        for lineno, line in enumerate(source.split("\n"), start=1):
+            if m := re.match(r"[ ]*[\w]{1}", line):
+                indent = len(m[0])
                 while indent <= active_node[1]:
                     active_node = active_node[0]
 
-                t = re.match(
-                    r"[ \t]*(async[ \t]+)?(?P<type>(def|class){1})[ ]+(?P<name>[\w]+)", line
-                )
-                if t:
-                    current = (active_node, indent, [], t.group("name"), t.group("type"), lineno)
+                if t := re.match(
+                    r"[ \t]*(async[ \t]+)?(?P<type>(def|class){1})[ ]+(?P<name>[\w]+)",
+                    line,
+                ):
+                    current = active_node, indent, [], t["name"], t["type"], lineno
                     active_node[2].append(current)
                     active_node = current
 
@@ -102,7 +99,7 @@ class OutlineView(ttk.Frame):
     def _add_item_to_tree(self, parent, item):
         # create the text to be played for this item
         item_type = item[4]
-        item_text = " " + item[3]
+        item_text = f" {item[3]}"
 
         if item_type == "class":
             image = self._class_img
@@ -123,8 +120,7 @@ class OutlineView(ttk.Frame):
             self.tree.delete(child_id)
 
     def _on_select(self, event):
-        editor = get_workbench().get_editor_notebook().get_current_editor()
-        if editor:
+        if editor := get_workbench().get_editor_notebook().get_current_editor():
             code_view = editor.get_code_view()
             focus = self.tree.focus()
             if not focus:
@@ -135,7 +131,7 @@ class OutlineView(ttk.Frame):
                 return
 
             lineno = values[0]
-            index = code_view.text.index(str(lineno) + ".0")
+            index = code_view.text.index(f"{str(lineno)}.0")
             code_view.text.see(index)  # make sure that the double-clicked item is visible
             code_view.text.select_lines(lineno, lineno)
 

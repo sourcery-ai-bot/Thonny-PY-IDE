@@ -11,7 +11,7 @@ class InfraredSensor:
     """
 
     def __init__(self, port: Port):
-        if port == Port.A or port == Port.B or port == Port.C or port == Port.D:
+        if port in [Port.A, Port.B, Port.C, Port.D]:
             raise ValueError("Sensors must use Port S1, S2, S3, or S4.")
 
     def distance(self) -> int:
@@ -33,7 +33,7 @@ class InfraredSensor:
         Returns:
             Tuple of relative distance (0 to 100) and approximate angle (-75 to 75 degrees) between remote and infrared sensor or (None,None) if no remote is detected.
         """
-        if not channel in range(1,5):
+        if channel not in range(1, 5):
             raise ValueError('Channel must be 1, 2, 3, or 4.')
         return (0, 0)
 
@@ -49,8 +49,8 @@ class InfraredSensor:
         Returns:
             List of pressed buttons on the remote on the specified channel.
         """
-        if not channel in range(1,5):
-            raise ValueError('Channel must be 1, 2, 3, or 4.') 
+        if channel not in range(1, 5):
+            raise ValueError('Channel must be 1, 2, 3, or 4.')
         return []
 
     def keypad(self) -> List[Button]:

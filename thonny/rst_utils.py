@@ -137,6 +137,8 @@ class RstText(TweakableText):
 
         import docutils.nodes
 
+
+
         class TkTextRenderingVisitor(docutils.nodes.GenericNodeVisitor):
             def __init__(self, document, text, global_tags=(), unique_tag_count=0):
                 super().__init__(document)
@@ -165,10 +167,7 @@ class RstText(TweakableText):
                 self.section_level -= 1
 
             def _get_title_tag(self):
-                if self.in_topic:
-                    return "topic_title"
-                else:
-                    return "h%d" % (self.section_level + 1)
+                return "topic_title" if self.in_topic else "h%d" % (self.section_level + 1)
 
             def visit_title(self, node):
                 self.in_title = True
@@ -214,14 +213,11 @@ class RstText(TweakableText):
 
             def _visit_toggle_topic(self, node):
                 tag = self._create_unique_tag()
-                title_id_tag = tag + "_title"
-                body_id_tag = tag + "_body"
+                title_id_tag = f"{tag}_title"
+                body_id_tag = f"{tag}_body"
 
                 def get_toggler_image_name(kind):
-                    if get_workbench().uses_dark_ui_theme():
-                        return kind + "_light"
-                    else:
-                        return kind
+                    return f"{kind}_light" if get_workbench().uses_dark_ui_theme() else kind
 
                 if "open" in node.attributes["classes"]:
                     initial_image = get_toggler_image_name("boxminus")
@@ -386,7 +382,7 @@ class RstText(TweakableText):
                 raise docutils.nodes.SkipNode()
 
             def visit_system_message(self, node):
-                logger.warning("docutils message: '%s'. Context: %s" % (node.astext(), node.parent))
+                logger.warning(f"docutils message: '{node.astext()}'. Context: {node.parent}")
                 raise docutils.nodes.SkipNode
 
             def visit_emphasis(self, node):
@@ -418,7 +414,7 @@ class RstText(TweakableText):
 
             def _create_unique_tag(self):
                 self.unique_tag_count += 1
-                return "_UT_%s" % self.unique_tag_count
+                return f"_UT_{self.unique_tag_count}"
 
             def _node_to_text(self, node):
                 if node.parent.attributes.get("xml:space") == "preserve":
@@ -461,6 +457,7 @@ class RstText(TweakableText):
                     tags.add("topic_title_code")
 
                 return tuple(sorted(tags))
+
 
         self._visitor = TkTextRenderingVisitor(doc, self, global_tags, unique_tag_count)
 

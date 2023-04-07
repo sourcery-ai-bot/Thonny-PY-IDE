@@ -82,16 +82,16 @@ class LocalCPythonProxy(SubprocessProxy):
             self._cancel_gui_update_loop()
 
     def _loop_gui_update(self, force=False):
-        if force or get_runner().is_waiting_toplevel_command():
-            # Don't send command if response for the last one hasn't arrived yet
-            if not self._expecting_response_for_gui_update:
-                try:
-                    self.send_command(InlineCommand("process_gui_events"))
-                    self._expecting_response_for_gui_update = True
-                except OSError:
-                    # the backend process may have been closed already
-                    # https://github.com/thonny/thonny/issues/966
-                    logger.exception("Could not send process_gui_events")
+        if (
+            force or get_runner().is_waiting_toplevel_command()
+        ) and not self._expecting_response_for_gui_update:
+            try:
+                self.send_command(InlineCommand("process_gui_events"))
+                self._expecting_response_for_gui_update = True
+            except OSError:
+                # the backend process may have been closed already
+                # https://github.com/thonny/thonny/issues/966
+                logger.exception("Could not send process_gui_events")
 
         self._gui_update_loop_id = get_workbench().after(50, self._loop_gui_update)
 
@@ -172,7 +172,7 @@ class LocalCPythonProxy(SubprocessProxy):
         else:
             exe_label = exe
         # •✶♦▸
-        return cls.backend_description + "  •  " + exe_label
+        return f"{cls.backend_description}  •  {exe_label}"
 
     @classmethod
     def get_switcher_entries(cls):
@@ -422,7 +422,7 @@ def _get_interpreters():
         if path is not None and os.path.isabs(path):
             result.add(path)
 
-    for conf in get_workbench().get_option(f"LocalCPython.last_configurations"):
+    for conf in get_workbench().get_option("LocalCPython.last_configurations"):
         path = conf["LocalCPython.executable"]
         if os.path.exists(path):
             result.add(normpath_with_actual_case(path))
@@ -488,8 +488,7 @@ def _get_interpreters_from_windows_registry():
                 "SOFTWARE\\Python\\PythonCore\\Wow6432Node\\" + version + "\\InstallPath",
             ]:
                 try:
-                    dir_ = winreg.QueryValue(key, subkey)
-                    if dir_:
+                    if dir_ := winreg.QueryValue(key, subkey):
                         path = os.path.join(dir_, WINDOWS_EXE)
                         if os.path.exists(path):
                             result.add(path)

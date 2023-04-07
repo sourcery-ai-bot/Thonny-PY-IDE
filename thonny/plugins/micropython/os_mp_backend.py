@@ -78,14 +78,12 @@ class UnixMicroPythonBackend(MicroPythonBackend, ABC):
         return self._connection
 
     def _resolve_executable(self, executable):
-        result = self._which(executable)
-        if result:
+        if result := self._which(executable):
             return result
-        else:
-            msg = "Executable '%s' not found. Please check your configuration!" % executable
-            if not executable.startswith("/"):
-                msg += " You may need to provide its absolute path."
-            raise ConnectionRefusedError(msg)
+        msg = f"Executable '{executable}' not found. Please check your configuration!"
+        if not executable.startswith("/"):
+            msg += " You may need to provide its absolute path."
+        raise ConnectionRefusedError(msg)
 
     def _which(self, executable):
         raise NotImplementedError()
@@ -209,16 +207,14 @@ class UnixMicroPythonBackend(MicroPythonBackend, ABC):
                 return NORMAL_PROMPT
 
             elif ends_overlap(pending, NORMAL_PROMPT):
-                # Maybe we have a prefix of the prompt and the rest is still coming?
-                follow_up = self._connection.soft_read(1, timeout=0.1)
-                if not follow_up:
-                    # most likely not a Python prompt, let's forget about it
-                    output_consumer(self._decode(pending), stream_name)
-                    pending = b""
-                else:
+                if follow_up := self._connection.soft_read(1, timeout=0.1):
                     # Let's withhold this for now
                     pending += follow_up
 
+                else:
+                    # most likely not a Python prompt, let's forget about it
+                    output_consumer(self._decode(pending), stream_name)
+                    pending = b""
             else:
                 # No prompt in sight.
                 # Output and keep working.
@@ -228,10 +224,7 @@ class UnixMicroPythonBackend(MicroPythonBackend, ABC):
     def _forward_unexpected_output(self, stream_name="stdout"):
         "Invoked between commands"
         data = self._connection.read_all()
-        if data.endswith(NORMAL_PROMPT):
-            out = data[: -len(NORMAL_PROMPT)]
-        else:
-            out = data
+        out = data[: -len(NORMAL_PROMPT)] if data.endswith(NORMAL_PROMPT) else data
         self._send_output(self._decode(out), "stdout")
 
     def _cmd_Run(self, cmd):
@@ -241,8 +234,7 @@ class UnixMicroPythonBackend(MicroPythonBackend, ABC):
         if cmd.source and args[0] == "-c":
             if len(args) > 1:
                 self._send_error_message(
-                    "Warning: MicroPython doesn't allow program arguments (%s) together with '-c'"
-                    % " ".join(map(shlex.quote, args[1:]))
+                    f"""Warning: MicroPython doesn't allow program arguments ({" ".join(map(shlex.quote, args[1:]))}) together with '-c'"""
                 )
             args = ["-c", cmd.source]
 

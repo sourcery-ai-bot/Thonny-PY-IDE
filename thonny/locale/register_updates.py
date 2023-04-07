@@ -30,7 +30,7 @@ def register_locale(name: str) -> None:
         ):
             msg = entry.msgstr.strip().replace("\n", " ")
             if not msg.endswith("."):
-                msg = msg + "."
+                msg = f"{msg}."
 
             review_messages.append(msg)
 

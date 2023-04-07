@@ -29,7 +29,7 @@ print("Got normal prompt")
 
 
 start_time = time.time()
-for i in range(100):
+for _ in range(100):
     # goto paste mode
     s.write(b"\x05")
     forward_until(b"=== ")

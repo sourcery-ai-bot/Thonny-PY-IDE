@@ -36,7 +36,9 @@ class BirdsEyeRunner(Executor):
 
         eye.exec_string(source, filename, globs=global_vars, locs=global_vars, deep=True)
         port = os.environ.get("BIRDSEYE_PORT", "7777")
-        webbrowser.open_new_tab("http://localhost:%s/ipython_call/" % port + eye._last_call_id)
+        webbrowser.open_new_tab(
+            f"http://localhost:{port}/ipython_call/{eye._last_call_id}"
+        )
 
 
 def load_plugin():

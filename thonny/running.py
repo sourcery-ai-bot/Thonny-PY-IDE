@@ -213,7 +213,7 @@ class Runner:
 
     def _set_state(self, state: str) -> None:
         if self._state != state:
-            logger.debug("Runner state changed: %s ==> %s" % (self._state, state))
+            logger.debug(f"Runner state changed: {self._state} ==> {state}")
             self._state = state
 
     def is_running(self):
@@ -250,7 +250,9 @@ class Runner:
             and not self.is_waiting_debugger_command()
         ):
             get_workbench().bell()
-            logger.warning("RUNNER: Command %s was attempted at state %s" % (cmd, self.get_state()))
+            logger.warning(
+                f"RUNNER: Command {cmd} was attempted at state {self.get_state()}"
+            )
             return
 
         # Attach extra info
@@ -290,7 +292,7 @@ class Runner:
             get_workbench().event_generate("BackendRestart", full=False)
 
     def send_command_and_wait(self, cmd: InlineCommand, dialog_title: str) -> MessageFromBackend:
-        dlg = InlineCommandDialog(get_workbench(), cmd, title=dialog_title + " ...")
+        dlg = InlineCommandDialog(get_workbench(), cmd, title=f"{dialog_title} ...")
         show_dialog(dlg)
         return dlg.response
 
@@ -345,7 +347,7 @@ class Runner:
         command_name: str = "Run",
     ) -> None:
         rel_filename = universal_relpath(script_path, working_directory)
-        cmd_parts = ["%" + command_name, rel_filename] + args
+        cmd_parts = [f"%{command_name}", rel_filename] + args
         cmd_line = construct_cmd_line(cmd_parts, [EDITOR_CONTENT_TOKEN])
 
         self.execute_via_shell(cmd_line, working_directory)
@@ -361,7 +363,8 @@ class Runner:
 
         get_shell().submit_magic_command(
             construct_cmd_line(
-                ["%" + command_name, "-c", EDITOR_CONTENT_TOKEN] + args, [EDITOR_CONTENT_TOKEN]
+                [f"%{command_name}", "-c", EDITOR_CONTENT_TOKEN] + args,
+                [EDITOR_CONTENT_TOKEN],
             )
         )
 
@@ -397,7 +400,8 @@ class Runner:
                         self._wait_for_prompt(1)
                     except TimeoutError:
                         get_shell().print_error(
-                            "Could not force-stop the program. " + wait_instructions + "\n"
+                            f"Could not force-stop the program. {wait_instructions}"
+                            + "\n"
                         )
                 else:
                     # For some back-ends (e.g. BareMetalMicroPython) killing is not an option.
@@ -458,12 +462,11 @@ class Runner:
         raise TimeoutError("Backend did not respond in time")
 
     def _get_active_arguments(self):
-        if get_workbench().get_option("view.show_program_arguments"):
-            args_str = get_workbench().get_option("run.program_arguments")
-            get_workbench().log_program_arguments_string(args_str)
-            return shlex.split(args_str)
-        else:
+        if not get_workbench().get_option("view.show_program_arguments"):
             return []
+        args_str = get_workbench().get_option("run.program_arguments")
+        get_workbench().log_program_arguments_string(args_str)
+        return shlex.split(args_str)
 
     def cmd_run_current_script_enabled(self) -> bool:
         return (
@@ -492,29 +495,28 @@ class Runner:
             show_command_not_available_in_flatpak_message()
             return
 
-        filename = get_saved_current_script_filename()
-        if not filename:
+        if filename := get_saved_current_script_filename():
+            self._proxy.run_script_in_terminal(
+                filename,
+                self._get_active_arguments(),
+                get_workbench().get_option("run.run_in_terminal_python_repl"),
+                get_workbench().get_option("run.run_in_terminal_keep_open"),
+            )
+        else:
             return
 
-        self._proxy.run_script_in_terminal(
-            filename,
-            self._get_active_arguments(),
-            get_workbench().get_option("run.run_in_terminal_python_repl"),
-            get_workbench().get_option("run.run_in_terminal_keep_open"),
-        )
-
     def _cmd_interrupt(self) -> None:
-        if self._proxy is not None:
-            if _console_allocated:
-                self._proxy.interrupt()
-            else:
-                messagebox.showerror(
-                    "No console",
-                    "Can't interrupt as console was not allocated.\n\nUse Stop/Restart instead.",
-                    master=self,
-                )
-        else:
+        if self._proxy is None:
             logger.warning("User tried interrupting without proxy")
+
+        elif _console_allocated:
+            self._proxy.interrupt()
+        else:
+            messagebox.showerror(
+                "No console",
+                "Can't interrupt as console was not allocated.\n\nUse Stop/Restart instead.",
+                master=self,
+            )
 
     def _cmd_interrupt_with_shortcut(self, event=None):
         if not self._cmd_interrupt_enabled():
@@ -710,39 +712,40 @@ class Runner:
         return self._proxy
 
     def _check_alloc_console(self) -> None:
-        if sys.executable.endswith("pythonw.exe"):
-            # These don't have console allocated.
-            # Console is required for sending interrupts.
+        if not sys.executable.endswith("pythonw.exe"):
+            return
+        # These don't have console allocated.
+        # Console is required for sending interrupts.
 
-            # AllocConsole would be easier but flashes console window
+        # AllocConsole would be easier but flashes console window
 
-            import ctypes
+        import ctypes
 
-            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
 
-            exe = sys.executable.replace("pythonw.exe", "python.exe")
+        exe = sys.executable.replace("pythonw.exe", "python.exe")
 
-            cmd = [exe, "-c", "print('Hi!'); input()"]
-            child = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                shell=True,
-            )
-            child.stdout.readline()
-            result = kernel32.AttachConsole(child.pid)
-            if not result:
-                err = ctypes.get_last_error()
-                logger.info("Could not allocate console. Error code: " + str(err))
-            child.stdin.write(b"\n")
-            try:
-                child.stdin.flush()
-            except Exception:
-                # May happen eg. when installation path has "&" in it
-                # See https://bitbucket.org/plas/thonny/issues/508/cant-allocate-windows-console-when
-                # Without flush the console window becomes visible, but Thonny can be still used
-                logger.exception("Problem with finalizing console allocation")
+        cmd = [exe, "-c", "print('Hi!'); input()"]
+        child = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True,
+        )
+        child.stdout.readline()
+        result = kernel32.AttachConsole(child.pid)
+        if not result:
+            err = ctypes.get_last_error()
+            logger.info(f"Could not allocate console. Error code: {str(err)}")
+        child.stdin.write(b"\n")
+        try:
+            child.stdin.flush()
+        except Exception:
+            # May happen eg. when installation path has "&" in it
+            # See https://bitbucket.org/plas/thonny/issues/508/cant-allocate-windows-console-when
+            # Without flush the console window becomes visible, but Thonny can be still used
+            logger.exception("Problem with finalizing console allocation")
 
     def ready_for_remote_file_operations(self, show_message=False):
         if not self._proxy or not self.supports_remote_files():
@@ -751,22 +754,20 @@ class Runner:
         ready = self._proxy.ready_for_remote_file_operations()
 
         if not ready and show_message:
-            if not self._proxy.is_connected():
-                msg = "Device is not connected"
-            else:
-                msg = (
+            msg = (
+                (
                     "Device is busy -- can't perform this action now."
                     + "\nPlease wait or cancel current work and try again!"
                 )
+                if self._proxy.is_connected()
+                else "Device is not connected"
+            )
             messagebox.showerror("Can't complete", msg, master=get_workbench())
 
         return ready
 
     def supports_remote_files(self):
-        if self._proxy is None:
-            return False
-        else:
-            return self._proxy.supports_remote_files()
+        return False if self._proxy is None else self._proxy.supports_remote_files()
 
     def supports_remote_directories(self):
         if self._proxy is None:
@@ -775,10 +776,7 @@ class Runner:
             return self._proxy.supports_remote_directories()
 
     def get_node_label(self):
-        if self._proxy is None:
-            return "Back-end"
-        else:
-            return self._proxy.get_node_label()
+        return "Back-end" if self._proxy is None else self._proxy.get_node_label()
 
     def using_venv(self) -> bool:
         from thonny.plugins.cpython_frontend import LocalCPythonProxy
@@ -931,11 +929,9 @@ class SubprocessProxy(BackendProxy, ABC):
     def __init__(self, clean: bool, mgmt_executable: Optional[str] = None) -> None:
         super().__init__(clean)
 
-        if mgmt_executable:
-            self._mgmt_executable = mgmt_executable
-        else:
-            self._mgmt_executable = get_front_interpreter_for_subprocess()
-
+        self._mgmt_executable = (
+            mgmt_executable or get_front_interpreter_for_subprocess()
+        )
         if ".." in self._mgmt_executable:
             self._mgmt_executable = os.path.normpath(self._mgmt_executable)
 
@@ -1083,7 +1079,7 @@ class SubprocessProxy(BackendProxy, ABC):
             # required by SshCPythonBackend for creating fresh target process
             cmd["expected_cwd"] = self._cwd
 
-        method_name = "_cmd_" + cmd.name
+        method_name = f"_cmd_{cmd.name}"
 
         if hasattr(self, method_name):
             getattr(self, method_name)(cmd)
@@ -1226,14 +1222,15 @@ class SubprocessProxy(BackendProxy, ABC):
             get_workbench().set_local_cwd(cwd)
 
     def get_site_packages(self):
-        # NB! site.sitepackages may not be present in virtualenv
-        for d in self._sys_path:
-            if ("site-packages" in d or "dist-packages" in d) and path_startswith(
-                d, self._sys_prefix
-            ):
-                return d
-
-        return None
+        return next(
+            (
+                d
+                for d in self._sys_path
+                if ("site-packages" in d or "dist-packages" in d)
+                and path_startswith(d, self._sys_prefix)
+            ),
+            None,
+        )
 
     def get_user_site_packages(self):
         return self._usersitepackages
@@ -1258,40 +1255,37 @@ class SubprocessProxy(BackendProxy, ABC):
                 self._check_remember_current_configuration()
                 self._have_check_remembered_current_configuration = True
 
-        if msg.event_type == "ProgramOutput":
-            # combine available small output messages to one single message,
-            # in order to put less pressure on UI code
-
-            wait_time = 0.01
-            total_wait_time = 0
-            while True:
-                if len(self._response_queue) == 0:
-                    if _ends_with_incomplete_ansi_code(msg["data"]) and total_wait_time < 0.1:
-                        # Allow reader to send the remaining part
-                        sleep(wait_time)
-                        total_wait_time += wait_time
-                        continue
-                    else:
-                        return msg
-                else:
-                    next_msg = self._response_queue.popleft()
-                    if (
-                        next_msg.event_type == "ProgramOutput"
-                        and next_msg["stream_name"] == msg["stream_name"]
-                        and (
-                            len(msg["data"]) + len(next_msg["data"]) <= OUTPUT_MERGE_THRESHOLD
-                            and ("\n" not in msg["data"] or not io_animation_required)
-                            or _ends_with_incomplete_ansi_code(msg["data"])
-                        )
-                    ):
-                        msg["data"] += next_msg["data"]
-                    else:
-                        # not to be sent in the same block, put it back
-                        self._response_queue.appendleft(next_msg)
-                        return msg
-
-        else:
+        if msg.event_type != "ProgramOutput":
             return msg
+        # combine available small output messages to one single message,
+        # in order to put less pressure on UI code
+
+        wait_time = 0.01
+        total_wait_time = 0
+        while True:
+            if len(self._response_queue) == 0:
+                if _ends_with_incomplete_ansi_code(msg["data"]) and total_wait_time < 0.1:
+                    # Allow reader to send the remaining part
+                    sleep(wait_time)
+                    total_wait_time += wait_time
+                else:
+                    return msg
+            else:
+                next_msg = self._response_queue.popleft()
+                if (
+                    next_msg.event_type == "ProgramOutput"
+                    and next_msg["stream_name"] == msg["stream_name"]
+                    and (
+                        len(msg["data"]) + len(next_msg["data"]) <= OUTPUT_MERGE_THRESHOLD
+                        and ("\n" not in msg["data"] or not io_animation_required)
+                        or _ends_with_incomplete_ansi_code(msg["data"])
+                    )
+                ):
+                    msg["data"] += next_msg["data"]
+                else:
+                    # not to be sent in the same block, put it back
+                    self._response_queue.appendleft(next_msg)
+                    return msg
 
 
 def _ends_with_incomplete_ansi_code(data):
@@ -1495,7 +1489,7 @@ _command_id_counter = 0
 def generate_command_id():
     global _command_id_counter
     _command_id_counter += 1
-    return "cmd_" + str(_command_id_counter)
+    return f"cmd_{_command_id_counter}"
 
 
 class InlineCommandDialog(WorkDialog):
@@ -1535,27 +1529,28 @@ class InlineCommandDialog(WorkDialog):
         return self._instructions or self._cmd.get("description", "Working...")
 
     def _on_response(self, response):
-        if response.get("command_id") == getattr(self._cmd, "id"):
-            logger.debug("Dialog got response: %s", response)
-            self.response = response
-            self.returncode = response.get("returncode", None)
-            success = (
-                not self.returncode and not response.get("error") and not response.get("errors")
-            )
-            if success:
-                self.set_action_text("Done!")
-            else:
-                self.set_action_text("Error")
-                if response.get("error"):
-                    self.append_text("Error %s\n" % response["error"], stream_name="stderr")
-                if response.get("errors"):
-                    self.append_text("Errors %s\n" % response["errors"], stream_name="stderr")
-                if self.returncode:
-                    self.append_text(
-                        "Process returned with code %s\n" % self.returncode, stream_name="stderr"
-                    )
+        if response.get("command_id") != getattr(self._cmd, "id"):
+            return
+        logger.debug("Dialog got response: %s", response)
+        self.response = response
+        self.returncode = response.get("returncode", None)
+        success = (
+            not self.returncode and not response.get("error") and not response.get("errors")
+        )
+        if success:
+            self.set_action_text("Done!")
+        else:
+            self.set_action_text("Error")
+            if response.get("error"):
+                self.append_text("Error %s\n" % response["error"], stream_name="stderr")
+            if response.get("errors"):
+                self.append_text("Errors %s\n" % response["errors"], stream_name="stderr")
+            if self.returncode:
+                self.append_text(
+                    "Process returned with code %s\n" % self.returncode, stream_name="stderr"
+                )
 
-            self.report_done(success)
+        self.report_done(success)
 
     def _on_backend_terminated(self, msg):
         self.set_action_text("Error!")

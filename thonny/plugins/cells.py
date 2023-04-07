@@ -25,11 +25,7 @@ def update_editor_cells(event):
     cells = []
     prev_marker = 0
     for match in cell_regex.finditer(source):
-        if match.start() == 0:
-            this_marker = match.start()
-        else:
-            this_marker = match.start() + 1
-
+        this_marker = match.start() if match.start() == 0 else match.start() + 1
         cell_start_index = text.index("1.0+%dc" % prev_marker)
         header_end_index = text.index("1.0+%dc" % match.end())
         cell_end_index = text.index("1.0+%dc" % this_marker)
@@ -145,7 +141,7 @@ def run_selection(event=None):
 
         # move cursor to next row
         row, col = map(int, text.index("insert").split("."))
-        text.mark_set("insert", "{}.{}".format(row + 1, col))
+        text.mark_set("insert", f"{row + 1}.{col}")
 
         _submit_code(code)
 

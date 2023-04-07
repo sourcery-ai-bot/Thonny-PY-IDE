@@ -61,11 +61,9 @@ class CircuitPythonBackend(BareMetalMicroPythonBackend):
 
     def _output_warrants_interrupt(self, data):
         data = data.strip()
-        for phrase in _ENTER_REPL_PHRASES:
-            if data.endswith(phrase.encode("utf-8")):
-                return True
-
-        return False
+        return any(
+            data.endswith(phrase.encode("utf-8")) for phrase in _ENTER_REPL_PHRASES
+        )
 
     def _get_sys_path_for_analysis(self) -> Optional[List[str]]:
         return [

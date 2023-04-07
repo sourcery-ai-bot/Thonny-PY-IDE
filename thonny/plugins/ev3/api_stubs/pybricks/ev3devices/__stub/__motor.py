@@ -20,7 +20,7 @@ class Motor:
     """
 
     def __init__(self, port: Port, positive_direction: Direction = Direction.CLOCKWISE, gears: Union[List[int], List[List[int]]] = None):
-        if port == Port.S1 or port == Port.S2 or port == port.S3 or port == port.S4:
+        if port in [Port.S1, Port.S2, port.S3, port.S4]:
             raise ValueError("Motors must use Port A, B, C, or D.")
         self.control = Control()  # type: Control
 

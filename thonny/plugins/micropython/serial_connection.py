@@ -47,7 +47,7 @@ class SerialConnection(MicroPythonConnection):
             err_str = str(error)
             if "FileNotFoundError" in err_str:
                 err_str = "port not found"
-            message = "Unable to connect to " + port + ": " + err_str
+            message = f"Unable to connect to {port}: {err_str}"
 
             # TODO: check if these error codes also apply to Linux and Mac
             if error.errno == 13 and sys.platform == "linux":

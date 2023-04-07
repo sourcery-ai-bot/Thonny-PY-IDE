@@ -20,17 +20,20 @@ def extract_text_range(source, text_range):
 
 
 def find_expression(start_node, text_range):
-    for node in ast.walk(start_node):
-        if (
-            isinstance(node, ast.expr)
-            and node.lineno == text_range.lineno
-            and node.col_offset == text_range.col_offset
-            and node.end_lineno == text_range.end_lineno
-            and node.end_col_offset == text_range.end_col_offset
-        ):
-            return node
-
-    return None
+    return next(
+        (
+            node
+            for node in ast.walk(start_node)
+            if (
+                isinstance(node, ast.expr)
+                and node.lineno == text_range.lineno
+                and node.col_offset == text_range.col_offset
+                and node.end_lineno == text_range.end_lineno
+                and node.end_col_offset == text_range.end_col_offset
+            )
+        ),
+        None,
+    )
 
 
 def parse_source(source: str, filename="<unknown>", mode="exec", fallback_to_one_char=False):
@@ -59,10 +62,7 @@ def get_last_child(node, skip_incorrect=True):
             if ok_node(nodes[i]):
                 node = nodes[i]
                 if isinstance(node, ast.Starred):
-                    if ok_node(node.value):
-                        return node.value
-                    else:
-                        return None
+                    return node.value if ok_node(node.value) else None
                 else:
                     return nodes[i]
 
@@ -88,11 +88,7 @@ def get_last_child(node, skip_incorrect=True):
         return last_ok(node.values)
 
     elif isinstance(node, ast.BinOp):
-        if ok_node(node.right):
-            return node.right
-        else:
-            return ok_node(node.left)
-
+        return node.right if ok_node(node.right) else ok_node(node.left)
     elif isinstance(node, ast.Compare):
         return last_ok(node.comparators)
 
@@ -118,11 +114,7 @@ def get_last_child(node, skip_incorrect=True):
         return ok_node(node.value)
 
     elif isinstance(node, ast.Assert):
-        if ok_node(node.msg):
-            return node.msg
-        else:
-            return ok_node(node.test)
-
+        return node.msg if ok_node(node.msg) else ok_node(node.test)
     elif isinstance(node, ast.Slice):
         # [:]
         if ok_node(node.step):
@@ -143,11 +135,7 @@ def get_last_child(node, skip_incorrect=True):
 
     elif isinstance(node, ast.Subscript):
         result = get_last_child(node.slice, skip_incorrect)
-        if result is not None:
-            return result
-        else:
-            return node.value
-
+        return result if result is not None else node.value
     elif isinstance(node, ast.Raise):
         if ok_node(node.cause):
             return node.cause

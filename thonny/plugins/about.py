@@ -28,7 +28,9 @@ class AboutDialog(CommonDialogEx):
         heading_font = default_heading_font.copy()
         heading_font.configure(size=int(default_heading_font["size"] * 1.7), weight="bold")
         heading_label = ttk.Label(
-            self.main_frame, text="Thonny " + thonny.get_version(), font=heading_font
+            self.main_frame,
+            text=f"Thonny {thonny.get_version()}",
+            font=heading_font,
         )
         heading_label.grid(pady=(self.get_large_padding(), self.get_small_padding()))
 
@@ -44,19 +46,22 @@ class AboutDialog(CommonDialogEx):
                 system_desc = "Linux"
 
             if "32" not in system_desc and "64" not in system_desc:
-                system_desc += " " + self.get_os_word_size_guess()
+                system_desc += f" {self.get_os_word_size_guess()}"
+        elif sys.platform == "win32":
+            release = platform.release()
+            # Win 10 and 11 both give 10 as release
+            try:
+                build = int(platform.version().split(".")[2])
+                if release == "10" and build >= 22000:
+                    release = "11"
+            except Exception:
+                logger.exception("Could not determine Windows version")
+
+            system_desc = f"{platform.system()} {release} {self.get_os_word_size_guess()}"
+
         else:
             release = platform.release()
-            if sys.platform == "win32":
-                # Win 10 and 11 both give 10 as release
-                try:
-                    build = int(platform.version().split(".")[2])
-                    if release == "10" and build >= 22000:
-                        release = "11"
-                except Exception:
-                    logger.exception("Could not determine Windows version")
-
-            system_desc = platform.system() + " " + release + " " + self.get_os_word_size_guess()
+            system_desc = f"{platform.system()} {release} {self.get_os_word_size_guess()}"
 
         platform_label = ttk.Label(
             self.main_frame,

@@ -32,10 +32,7 @@ def find_download_links(
         assert isinstance(page_url, list)
         page_urls = page_url
 
-    content = ""
-    for url in page_urls:
-        content += read_page(url)
-
+    content = "".join(read_page(url) for url in page_urls)
     parser.feed(content)
 
     stables = []
@@ -44,9 +41,11 @@ def find_download_links(
     for link in parser.links:
         link = url_prefix + link
         if len(stables) < max_stable_count and re.search(stable_pattern, link):
-            stables.append({"version": re.search(stable_pattern, link).group(1), "url": link})
+            stables.append({"version": re.search(stable_pattern, link)[1], "url": link})
         elif len(unstables) < max_unstable_count and re.search(unstable_pattern, link):
-            unstables.append({"version": re.search(unstable_pattern, link).group(1), "url": link})
+            unstables.append(
+                {"version": re.search(unstable_pattern, link)[1], "url": link}
+            )
 
     return stables + unstables
 
@@ -60,11 +59,7 @@ def add_download_link_if_exists(links: List[Dict[str, str]], link: str, version:
 
 
 def get_attr_value(attrs, name):
-    for key, value in attrs:
-        if key == name:
-            return value
-
-    return None
+    return next((value for key, value in attrs if key == name), None)
 
 
 class FileLinksParser(HTMLParser):
@@ -98,7 +93,7 @@ def save_variants(variants: List, flasher: str, families: Set[str], file_path:st
 
     for variant in variants:
         title = variant.get("title", variant["model"])
-        if (title.lower() + " ").startswith(variant["vendor"].lower()):
+        if f"{title.lower()} ".startswith(variant["vendor"].lower()):
             variant["title"] = title[len(variant["vendor"]) :].strip()
         title = variant.get("title", variant["model"])
 

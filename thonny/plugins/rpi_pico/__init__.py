@@ -23,7 +23,7 @@ class RaspberryPiPicoBackendProxy(RP2040BackendProxy):
         return {(0x2E8A, 0x0005)}
 
     @classmethod
-    def get_node_label(self):
+    def get_node_label(cls):
         return "Raspberry Pi Pico"
 
 

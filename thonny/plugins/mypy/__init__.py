@@ -56,8 +56,7 @@ class MyPyAnalyzer(SubprocessProgramAnalyzer):
             args.insert(3, "--no-error-summary")
 
         env = os.environ.copy()
-        mypypath = get_workbench().get_option("assistance.mypypath")
-        if mypypath:
+        if mypypath := get_workbench().get_option("assistance.mypypath"):
             env["MYPYPATH"] = mypypath
 
         self._proc = ui_utils.popen_with_ui_thread_callback(
@@ -82,31 +81,31 @@ class MyPyAnalyzer(SubprocessProgramAnalyzer):
         for line in out_lines:
             m = re.match(r"(.*?):(\d+)(:(\d+))?:(.*?):(.*)", line.strip())
             if m is not None:
-                message = m.group(6).strip()
+                message = m[6].strip()
                 if message == "invalid syntax":
                     continue  # user will see this as Python error
 
-                filename = m.group(1)
+                filename = m[1]
                 if filename not in self.interesting_files:
-                    logger.warning("MyPy: " + line)
+                    logger.warning(f"MyPy: {line}")
                     continue
 
                 atts = {
                     "filename": filename,
-                    "lineno": int(m.group(2)),
-                    "kind": m.group(5).strip(),  # always "error" ?
+                    "lineno": int(m[2]),
+                    "kind": m[5].strip(),
                     "msg": message,
                     "group": "warnings",
                 }
-                if m.group(3):
+                if m[3]:
                     # https://github.com/thonny/thonny/issues/598
-                    atts["col_offset"] = max(int(m.group(4)) - 1, 0)
+                    atts["col_offset"] = max(int(m[4]) - 1, 0)
 
                 # TODO: add better categorization and explanation
                 atts["symbol"] = "mypy-" + atts["kind"]
                 warnings.append(atts)
             else:
-                logger.error("Can't parse MyPy line: " + line.strip())
+                logger.error(f"Can't parse MyPy line: {line.strip()}")
 
         self.completion_handler(self, warnings)
 

@@ -99,7 +99,7 @@ class BaseBackend(ABC):
         logger.info("Handling connection error")
         message = "Connection lost"
         if error:
-            message += " -- " + str(error)
+            message += f" -- {str(error)}"
         self._send_output("\n" + message + "\n", "stderr")
         self._send_output("\n" + "Use Stop/Restart to reconnect." + "\n", "stderr")
         sys.exit(1)
@@ -139,9 +139,8 @@ class BaseBackend(ABC):
 
     def _read_incoming_messages(self):
         # works in a separate thread
-        while True:
-            if not self._read_one_incoming_message():
-                break
+        while self._read_one_incoming_message():
+            pass
 
     def _read_one_incoming_message(self):
         msg_str = read_one_incoming_message_str(self._read_incoming_msg_line)
@@ -170,16 +169,11 @@ class BaseBackend(ABC):
                 response["command_name"] = command["name"]
             return response
         else:
-            if isinstance(response, dict):
-                args = response
-            else:
-                args = {}
-
+            args = response if isinstance(response, dict) else {}
             if isinstance(command, ToplevelCommand):
                 return ToplevelResponse(command_name=command.name, **args)
-            else:
-                assert isinstance(command, InlineCommand)
-                return InlineResponse(command_name=command.name, **args)
+            assert isinstance(command, InlineCommand)
+            return InlineResponse(command_name=command.name, **args)
 
     def send_message(self, msg: MessageFromBackend) -> None:
         sys.stdout.write(serialize_message(msg) + "\n")
@@ -205,7 +199,7 @@ class BaseBackend(ABC):
         pass
 
     def _report_internal_exception(self, msg: str) -> None:
-        user_msg = "PROBLEM IN THONNY'S BACK-END: " + msg
+        user_msg = f"PROBLEM IN THONNY'S BACK-END: {msg}"
         if sys.exc_info()[1]:
             err_msg = "\n".join(
                 traceback.format_exception_only(sys.exc_info()[0], sys.exc_info()[1])
@@ -271,12 +265,12 @@ class MainBackend(BaseBackend, ABC):
         if cmd.name in self._command_handlers:
             handler = self._command_handlers[cmd.name]
         else:
-            handler = getattr(self, "_cmd_" + cmd.name, None)
+            handler = getattr(self, f"_cmd_{cmd.name}", None)
 
         if handler is None:
             if isinstance(cmd, ToplevelCommand):
                 self._send_output(f"Unknown command '{cmd.name}'", "stderr")
-            response = {"error": "Unknown command: " + cmd.name}
+            response = {"error": f"Unknown command: {cmd.name}"}
         else:
             try:
                 response = handler(cmd)
@@ -285,13 +279,13 @@ class MainBackend(BaseBackend, ABC):
             except UserError as e:
                 logger.info("UserError while handling %r", cmd.name, exc_info=True)
                 if isinstance(cmd, ToplevelCommand):
-                    print(str(e), file=sys.stderr)
+                    print(e, file=sys.stderr)
                     response = {}
                 else:
                     response = {"error": str(e)}
             except KeyboardInterrupt as e:
                 if isinstance(cmd, ToplevelCommand):
-                    print(str(e), file=sys.stderr)
+                    print(e, file=sys.stderr)
                     response = {}
                 else:
                     response = {"error": "Interrupted", "interrupted": True}
@@ -470,7 +464,7 @@ class MainBackend(BaseBackend, ABC):
                 desc_infos = self._get_dir_descendants_info(path)
                 for key in desc_infos:
                     desc_infos[key]["anchor"] = path
-                result.update(desc_infos)
+                result |= desc_infos
 
         return result
 
@@ -482,7 +476,7 @@ class MainBackend(BaseBackend, ABC):
             full_child_path = path + self._get_sep() + child_name
             result[full_child_path] = child_info
             if child_info["kind"] == "dir":
-                result.update(self._get_dir_descendants_info(full_child_path))
+                result |= self._get_dir_descendants_info(full_child_path)
 
         return result
 
@@ -611,7 +605,7 @@ class UploadDownloadMixin(ABC):
 
             def copy_bytes_notifier(completed_bytes, total_bytes):
                 completed = completed_cost + completed_bytes
-                desc = str(round(completed / total_cost * 100)) + "%"
+                desc = f"{str(round(completed / total_cost * 100))}%"
 
                 self._report_progress(cmd, desc, completed, total_cost)
 
@@ -627,8 +621,7 @@ class UploadDownloadMixin(ABC):
                     completed_cost += self._get_file_fixed_cost() + item["size"]
             except OSError as e:
                 errors.append(
-                    "Could not copy %s to %s: %s"
-                    % (item["source_path"], item["target_path"], str(e))
+                    f'Could not copy {item["source_path"]} to {item["target_path"]}: {str(e)}'
                 )
 
         return errors
@@ -726,7 +719,7 @@ class RemoteProcess:
         return self.returncode
 
     def kill(self):
-        _, stdout, _ = self._client.exec_command("kill -9 %s" % self.pid)
+        _, stdout, _ = self._client.exec_command(f"kill -9 {self.pid}")
         # wait until completion
         stdout.channel.recv_exit_status()
 
@@ -789,9 +782,8 @@ class SshMixin(UploadDownloadMixin):
         # About -onlcr: https://stackoverflow.com/q/35887380/261181
         cmd_line_str = (
             "echo $$ ; stty -echo ; stty -onlcr ; "
-            + (" cd %s  2> /dev/null ;" % shlex.quote(cwd) if cwd else "")
-            + (" exec " + " ".join(map(shlex.quote, cmd_items)))
-        )
+            + (f" cd {shlex.quote(cwd)}  2> /dev/null ;" if cwd else "")
+        ) + (" exec " + " ".join(map(shlex.quote, cmd_items)))
         stdin, stdout, _ = self._client.exec_command(
             cmd_line_str, bufsize=0, get_pty=True, environment=env
         )
@@ -808,7 +800,7 @@ class SshMixin(UploadDownloadMixin):
         elif cmd.name == "interrupt":
             self._interrupt()
         else:
-            raise RuntimeError("Unknown immediateCommand %s" % cmd.name)
+            raise RuntimeError(f"Unknown immediateCommand {cmd.name}")
 
     def _kill(self):
         if self._proc is None or self._proc.poll() is not None:
@@ -889,17 +881,14 @@ def _longest_common_path_prefix(str_paths, path_class):
     if len(str_paths) == 1:
         return str_paths[0]
 
-    list_of_parts = []
-    for str_path in str_paths:
-        list_of_parts.append(path_class(str_path).parts)
-
+    list_of_parts = [path_class(str_path).parts for str_path in str_paths]
     first = list_of_parts[0]
     rest = list_of_parts[1:]
 
     i = 0
     while i < len(first):
         item_i = first[i]
-        if not all([len(x) > i and x[i] == item_i for x in rest]):
+        if not all(len(x) > i and x[i] == item_i for x in rest):
             break
         else:
             i += 1
@@ -927,7 +916,7 @@ def ensure_posix_directory(
             if mode is None:
                 mkdir_fun(step)
             elif not stat.S_ISDIR(mode):
-                raise AssertionError("'%s' is file, not a directory" % step)
+                raise AssertionError(f"'{step}' is file, not a directory")
 
 
 def interrupt_local_process() -> None:

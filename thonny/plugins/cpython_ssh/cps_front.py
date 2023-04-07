@@ -65,7 +65,7 @@ class SshCPythonProxy(SubprocessProxy):
         msg = super().fetch_next_message()
         if msg and "welcome_text" in msg:
             assert hasattr(self, "_reported_executable")
-            msg["welcome_text"] += " (" + self._reported_executable + " on " + self._host + ")"
+            msg["welcome_text"] += f" ({self._reported_executable} on {self._host})"
         return msg
 
     def supports_remote_files(self):
@@ -155,7 +155,7 @@ class SshCPythonProxy(SubprocessProxy):
 
         from thonny import terminal
 
-        userhost = "%s@%s" % (self._user, self._host)
+        userhost = f"{self._user}@{self._host}"
         terminal.run_in_terminal(
             ["ssh", userhost], cwd=get_workbench().get_local_cwd(), keep_open=False, title=userhost
         )

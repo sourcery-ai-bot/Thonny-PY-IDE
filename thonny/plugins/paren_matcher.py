@@ -58,14 +58,11 @@ class ParenMatcher:
         start_index = "1.0"
         end_index = self.text.index("end")
 
-        # Try to reduce search range for better performance.
-        index = self._find_block_start("@0,0 linestart", True)
-        if index:
+        if index := self._find_block_start("@0,0 linestart", True):
             start_index = index
 
         lower_right = "@%d,%d" % (self.text.winfo_width(), self.text.winfo_height())
-        index = self._find_block_start(lower_right + " lineend", False)
-        if index:
+        if index := self._find_block_start(f"{lower_right} lineend", False):
             end_index = index
 
         self._highlight(start_index, end_index)
@@ -85,10 +82,7 @@ class ParenMatcher:
             tags = self.text.tag_names(index)
             if "string3" in tags or "open_string3" in tags:
                 # not a block start
-                if backwards:
-                    start_position = index
-                else:
-                    start_position = index + " +1c"
+                start_position = index if backwards else f"{index} +1c"
             else:
                 break
 
@@ -151,10 +145,7 @@ class ParenMatcher:
         result = []
         try:
             tokens = tokenize.tokenize(io.BytesIO(source.encode("utf-8")).readline)
-            for token in tokens:
-                # if token.string != "" and token.string in "()[]{}":
-                if token.exact_type in TOKTYPES:
-                    result.append(token)
+            result.extend(token for token in tokens if token.exact_type in TOKTYPES)
         except Exception:
             # happens eg when parens are unbalanced or there is indentation error or ...
             pass
@@ -167,10 +158,7 @@ class ParenMatcher:
 
 class ShellParenMatcher(ParenMatcher):
     def _update_highlighting_for_active_range(self):
-        # TODO: check that cursor is in this range
-        index_parts = self.text.tag_prevrange("command", "end")
-
-        if index_parts:
+        if index_parts := self.text.tag_prevrange("command", "end"):
             start_index, end_index = index_parts
             self._highlight(start_index, end_index)
 
@@ -209,10 +197,7 @@ def update_highlighting_move(event):
     # needs delay because selecting with mouse causes many events
     # and I don't know how to distinguish selection from other moves
     t = time.time()
-    if t - _last_move_time > 0.1:
-        delay = None
-    else:
-        delay = 300
+    delay = None if t - _last_move_time > 0.1 else 300
     _last_move_time = t
     _update_highlighting(event, False, True, delay=delay)
 

@@ -18,16 +18,17 @@ class MicroPythonPipDialog(BackendPipDialog):
         assert isinstance(self._backend_proxy, MicroPythonProxy)
 
     def _confirm_install(self, package_data: Dict) -> bool:
-        if not self._looks_like_micropython_package(package_data):
-            if not messagebox.askyesno(
-                title=tr("Confirmation"),
-                message=tr(
-                    "This doesn't look like MicroPython/CircuitPython package.\n"
-                    "Are you sure you want to install it?"
-                ),
-                parent=self,
-            ):
-                return False
+        if not self._looks_like_micropython_package(
+            package_data
+        ) and not messagebox.askyesno(
+            title=tr("Confirmation"),
+            message=tr(
+                "This doesn't look like MicroPython/CircuitPython package.\n"
+                "Are you sure you want to install it?"
+            ),
+            parent=self,
+        ):
+            return False
 
         return super()._confirm_install(package_data)
 
@@ -39,17 +40,16 @@ class MicroPythonPipDialog(BackendPipDialog):
 
         classifiers = package_data["info"].get("classifiers", [])
         logger.debug("package classifiers: %s", classifiers)
-        for mp_class in [
-            "Programming Language :: Python :: Implementation :: MicroPython",
-            "Programming Language :: Python :: Implementation :: CircuitPython",
-        ]:
-            if mp_class in classifiers:
-                return True
-
-        return False
+        return any(
+            mp_class in classifiers
+            for mp_class in [
+                "Programming Language :: Python :: Implementation :: MicroPython",
+                "Programming Language :: Python :: Implementation :: CircuitPython",
+            ]
+        )
 
     def _get_package_metadata_url(self, name: str, version_str: Optional[str]) -> str:
-        return "https://micropython.org/pi/{}/json".format(urllib.parse.quote(name))
+        return f"https://micropython.org/pi/{urllib.parse.quote(name)}/json"
 
     def _get_package_metadata_fallback_url(
         self, name: str, version_str: Optional[str]
@@ -57,9 +57,7 @@ class MicroPythonPipDialog(BackendPipDialog):
         return super()._get_package_metadata_url(name, version_str)
 
     def _get_target_directory(self):
-        # TODO: should this be pipkin's decision?
-        target_dir = self._backend_proxy.get_pip_target_dir()
-        return target_dir
+        return self._backend_proxy.get_pip_target_dir()
 
     def _is_read_only(self):
         return self._get_target_directory() is None
@@ -98,10 +96,11 @@ class MicroPythonPipDialog(BackendPipDialog):
 
     def _show_read_only_instructions(self):
         self._append_info_text(tr("Not available") + "\n", ("caption",))
-        if not self._get_target_directory():
-            reason = " (" + tr("no absolute lib directory in sys.path") + ")"
-        else:
-            reason = ""
+        reason = (
+            ""
+            if self._get_target_directory()
+            else " (" + tr("no absolute lib directory in sys.path") + ")"
+        )
         self.info_text.direct_insert(
             "end",
             get_not_supported_translation() + reason + "\n\n",
@@ -116,9 +115,9 @@ class MicroPythonPipDialog(BackendPipDialog):
             name = item["name"].lower()
             if name == query:
                 return 0
-            elif name == "micropython-" + query:
+            elif name == f"micropython-{query}":
                 return 1
-            elif name == "pycopy-" + query:
+            elif name == f"pycopy-{query}":
                 return 2
             elif "micropython" in name:
                 return 3

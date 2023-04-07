@@ -14,7 +14,7 @@ __version__ = "1.0b7"
 
 
 def error(msg):
-    msg = "ERROR: " + msg
+    msg = f"ERROR: {msg}"
     print(msg, file=sys.stderr)
 
     return 1

@@ -160,7 +160,7 @@ class FindDialog(CommonDialog):
         self.replace_all_button.grid(
             column=3, row=3, sticky=tk.W + tk.E, padx=(0, padx), pady=(0, pady)
         )
-        if FindDialog.last_searched_word == None:
+        if FindDialog.last_searched_word is None:
             self.replace_all_button.config(state="disabled")
 
         # create bindings
@@ -212,7 +212,7 @@ class FindDialog(CommonDialog):
     # performs the replace operation - replaces the currently active found word with what is entered in the replace field
     def _perform_replace(self):
         # nothing is currently in found status
-        if self.active_found_tag == None:
+        if self.active_found_tag is None:
             return
 
         # get the found word bounds
@@ -242,7 +242,7 @@ class FindDialog(CommonDialog):
 
     # performs the replace operation followed by a new find
     def _perform_replace_and_find(self):
-        if self.active_found_tag == None:
+        if self.active_found_tag is None:
             return
         self._perform_replace()
         self._perform_find()
@@ -342,10 +342,9 @@ class FindDialog(CommonDialog):
             self.replace_button.config(state="disabled")
             return
 
-        self.last_processed_indexes = (
-            wordstart,
-            self.codeview.text.index("%s+1c" % wordstart),
-        )  # sets the data about last search
+        self.last_processed_indexes = wordstart, self.codeview.text.index(
+            f"{wordstart}+1c"
+        )
         self.codeview.text.see(wordstart)  # moves the view to the found index
         wordend = self.codeview.text.index(
             "%s+%dc" % (wordstart, len(tofind))
@@ -413,7 +412,7 @@ class FindDialog(CommonDialog):
             self.codeview.text.tag_add("found", currentpos, endpos)
             self._raise_tags()
 
-            currentpos = self.codeview.text.index("%s+1c" % currentpos)
+            currentpos = self.codeview.text.index(f"{currentpos}+1c")
 
 
 def load_plugin() -> None:

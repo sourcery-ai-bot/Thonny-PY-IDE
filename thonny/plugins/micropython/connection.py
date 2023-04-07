@@ -48,18 +48,16 @@ class MicroPythonConnection:
             except queue.Empty:
                 if timeout_is_soft:
                     return b""
-                else:
-                    logger.error(
-                        "Could not read expected %s bytes in %s seconds. Bytes read: %r",
-                        size,
-                        timeout,
-                        self._read_buffer,
-                    )
-                    raise ReadingTimeoutError(read_bytes=self._read_buffer)
+                logger.error(
+                    "Could not read expected %s bytes in %s seconds. Bytes read: %r",
+                    size,
+                    timeout,
+                    self._read_buffer,
+                )
+                raise ReadingTimeoutError(read_bytes=self._read_buffer)
 
         try:
-            data = self._read_buffer[:size]
-            return data
+            return self._read_buffer[:size]
         finally:
             del self._read_buffer[:size]
 

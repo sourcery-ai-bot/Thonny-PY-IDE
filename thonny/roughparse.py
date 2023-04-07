@@ -220,14 +220,10 @@ class RoughParser:
         # Peeking back worked; look forward until _synchre no longer
         # matches.
         i = pos + 1
-        while 1:
-            m = _synchre(str, i)
-            if m:
-                s, i = m.span()
-                if not is_char_in_string(s):
-                    pos = s
-            else:
-                break
+        while 1 and (m := _synchre(str, i)):
+            s, i = m.span()
+            if not is_char_in_string(s):
+                pos = s
         return pos
 
     # Throw away the start of the string.  Intended to be called with
@@ -284,7 +280,7 @@ class RoughParser:
         i, n = 0, len(str)
         while i < n:
             ch = str[i]
-            i = i + 1
+            i += 1
 
             # cases are checked in decreasing order of frequency
             if ch == "x":
@@ -307,14 +303,14 @@ class RoughParser:
                     # else the program is invalid, but we can't complain
                 continue
 
-            if ch == '"' or ch == "'":
+            if ch in ['"', "'"]:
                 # consume the string
                 quote = ch
                 if str[i - 1 : i + 2] == quote * 3:
                     quote = quote * 3
                 firstlno = lno
                 w = len(quote) - 1
-                i = i + w
+                i += w
                 while i < n:
                     ch = str[i]
                     i = i + 1
@@ -449,9 +445,7 @@ class RoughParser:
         push_stack = stack.append
         bracketing = [(p, 0)]
         while p < q:
-            # suck up all except ()[]{}'"#\\
-            m = _chew_ordinaryre(str, p, q)
-            if m:
+            if m := _chew_ordinaryre(str, p, q):
                 # we skipped at least one boring char
                 newp = m.end()
                 # back up over totally boring whitespace
@@ -481,7 +475,7 @@ class RoughParser:
                 bracketing.append((p, len(stack)))
                 continue
 
-            if ch == '"' or ch == "'":
+            if ch in ['"', "'"]:
                 # consume string
                 # Note that study1 did this with a Python loop, but
                 # we use a regexp here; the reason is speed in both
@@ -532,8 +526,7 @@ class RoughParser:
         j = j + 1  # one beyond open bracket
         # find first list item; set i to start of its line
         while j < n:
-            m = _itemre(str, j)
-            if m:
+            if m := _itemre(str, j):
                 j = m.end() - 1  # index of first interesting char
                 extra = 0
                 break
@@ -585,7 +578,7 @@ class RoughParser:
                 if level:
                     level = level - 1
                 i = i + 1
-            elif ch == '"' or ch == "'":
+            elif ch in ['"', "'"]:
                 i = _match_stringre(str, i, endpos).end()
             elif ch == "#":
                 break
@@ -659,7 +652,7 @@ class RoughParser:
 # all ASCII chars that may be in an identifier
 _ASCII_ID_CHARS = frozenset(string.ascii_letters + string.digits + "_")
 # all ASCII chars that may be the first char of an identifier
-_ASCII_ID_FIRST_CHARS = frozenset(string.ascii_letters + "_")
+_ASCII_ID_FIRST_CHARS = frozenset(f"{string.ascii_letters}_")
 
 # lookup table for whether 7-bit ASCII chars are valid in a Python identifier
 _IS_ASCII_ID_CHAR = [(chr(x) in _ASCII_ID_CHARS) for x in range(128)]
@@ -690,7 +683,7 @@ class HyperParser:
 
         for context in NUM_CONTEXT_LINES:
             startat = max(lno - context, 1)
-            startatindex = repr(startat) + ".0"
+            startatindex = f"{repr(startat)}.0"
             stopatindex = "%d.end" % lno
             # We add the newline because PyParse requires a newline
             # at end. We add a space so that index won't be at end
@@ -725,7 +718,7 @@ class HyperParser:
         """
         indexinrawtext = len(self.rawtext) - len(self.text.get(index, self.stopatindex))
         if indexinrawtext < 0:
-            raise ValueError("Index %s precedes the analyzed statement" % index)
+            raise ValueError(f"Index {index} precedes the analyzed statement")
         self.indexinrawtext = indexinrawtext
         # find the rightmost bracket to which index belongs
         self.indexbracket = 0
@@ -826,11 +819,11 @@ class HyperParser:
         # test for whether a string contains only valid identifier
         # characters.
         if i > limit and ord(s[i - 1]) >= 128:
-            while i - 4 >= limit and ("a" + s[i - 4 : pos]).isidentifier():
+            while i - 4 >= limit and f"a{s[i - 4:pos]}".isidentifier():
                 i -= 4
-            if i - 2 >= limit and ("a" + s[i - 2 : pos]).isidentifier():
+            if i - 2 >= limit and f"a{s[i - 2:pos]}".isidentifier():
                 i -= 2
-            if i - 1 >= limit and ("a" + s[i - 1 : pos]).isidentifier():
+            if i - 1 >= limit and f"a{s[i - 1:pos]}".isidentifier():
                 i -= 1
 
             # The identifier candidate starts here. If it isn't a valid
@@ -903,15 +896,12 @@ class HyperParser:
                 # last identifier pos.
                 break
 
-            ret = self._eat_identifier(rawtext, brck_limit, pos)
-            if ret:
+            if ret := self._eat_identifier(rawtext, brck_limit, pos):
                 # There is an identifier to eat
                 pos = pos - ret
                 last_identifier_pos = pos
                 # Now, to continue the search, we must find a dot.
                 postdot_phase = False
-                # (the loop continues now)
-
             elif pos == brck_limit:
                 # We are at a bracketing limit. If it is a closing
                 # bracket, eat the bracket, otherwise, stop the search.
@@ -925,11 +915,7 @@ class HyperParser:
                 brck_index -= 1
                 brck_limit = bracketing[brck_index][0]
                 last_identifier_pos = pos
-                if rawtext[pos] in "([":
-                    # [] and () may be used after an identifier, so we
-                    # continue. postdot_phase is True, so we don't allow a dot.
-                    pass
-                else:
+                if rawtext[pos] not in "([":
                     # We can't continue after other types of brackets
                     if rawtext[pos] in "'\"":
                         # Scan a string prefix

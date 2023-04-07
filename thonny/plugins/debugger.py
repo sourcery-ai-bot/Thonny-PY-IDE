@@ -70,7 +70,7 @@ class Debugger:
             if command == "resume":
                 self.clear_last_frame()
         else:
-            logger.debug("Bad state for sending debugger command " + str(command))
+            logger.debug(f"Bad state for sending debugger command {str(command)}")
 
     def get_run_to_cursor_breakpoint(self):
         return None
@@ -131,10 +131,7 @@ class Debugger:
         def create_edit_command_handler(virtual_event_sequence):
             def handler(event=None):
                 widget = get_workbench().focus_get()
-                if widget:
-                    return widget.event_generate(virtual_event_sequence)
-
-                return None
+                return widget.event_generate(virtual_event_sequence) if widget else None
 
             return handler
 
@@ -165,8 +162,7 @@ class SingleWindowDebugger(Debugger):
         get_workbench().get_view("StackView")
 
     def get_run_to_cursor_breakpoint(self):
-        editor = get_workbench().get_editor_notebook().get_current_editor()
-        if editor:
+        if editor := get_workbench().get_editor_notebook().get_current_editor():
             filename = editor.get_filename()
             selection = editor.get_code_view().get_selected_range()
             lineno = selection.lineno
@@ -180,9 +176,11 @@ class SingleWindowDebugger(Debugger):
         self._last_progress_message = msg
         self.bring_out_frame(self._last_progress_message.stack[-1].id, force=True)
 
-        if get_workbench().get_option("debugger.automatic_stack_view"):
-            if len(msg.stack) > 1:
-                get_workbench().show_view("StackView")
+        if (
+            get_workbench().get_option("debugger.automatic_stack_view")
+            and len(msg.stack) > 1
+        ):
+            get_workbench().show_view("StackView")
 
         get_workbench().get_view("ExceptionView").set_exception(
             msg["exception_info"]["lines_with_frame_info"]
@@ -246,16 +244,13 @@ class StackedWindowsDebugger(Debugger):
         self._main_frame_visualizer = None
 
     def get_run_to_cursor_breakpoint(self):
-        visualizer = self._get_topmost_selected_visualizer()
-        if visualizer:
-            assert isinstance(visualizer._text_frame, CodeView)
-            code_view = visualizer._text_frame
-            selection = code_view.get_selected_range()
-
-            target_lineno = visualizer._firstlineno - 1 + selection.lineno
-            return visualizer._filename, target_lineno
-        else:
+        if not (visualizer := self._get_topmost_selected_visualizer()):
             return None
+        assert isinstance(visualizer._text_frame, CodeView)
+        code_view = visualizer._text_frame
+        selection = code_view.get_selected_range()
+
+        return visualizer._filename, visualizer._firstlineno - 1 + selection.lineno
 
     def handle_debugger_progress(self, msg):
         super().handle_debugger_progress(msg)
@@ -312,12 +307,10 @@ class StackedWindowsDebugger(Debugger):
         topmost_text_widget = visualizer._text
         focused_widget = get_workbench().focus_get()
 
-        if focused_widget is None:
+        if focused_widget is None or focused_widget != topmost_text_widget:
             return None
-        elif focused_widget == topmost_text_widget:
-            return visualizer
         else:
-            return None
+            return visualizer
 
     def bring_out_frame(self, frame_id, force=False):
         if not force and frame_id == self._last_brought_out_frame_id:
@@ -480,7 +473,7 @@ class FrameVisualizer:
     def _show_exception(self, lines, frame_info):
         last_line_text = lines[-1][0]
         self.show_note(
-            last_line_text.strip() + " ",
+            f"{last_line_text.strip()} ",
             ("...", lambda _: get_workbench().show_view("ExceptionView")),
             focus=frame_info.focus,
         )
@@ -488,11 +481,7 @@ class FrameVisualizer:
     def _find_this_and_next_frame(self, stack):
         for i in range(len(stack)):
             if stack[i].id == self._frame_id:
-                if i == len(stack) - 1:  # last frame
-                    return stack[i], None
-                else:
-                    return stack[i], stack[i + 1]
-
+                return (stack[i], None) if i == len(stack) - 1 else (stack[i], stack[i + 1])
         raise AssertionError("Frame doesn't exist anymore")
 
     def _tag_range(self, text_range, tag):
@@ -548,15 +537,14 @@ class FrameVisualizer:
     def _create_next_frame_visualizer(self, next_frame_info):
         if next_frame_info.code_name == "<module>":
             return ModuleLoadDialog(self._text, next_frame_info)
+        dialog = FunctionCallDialog(self._text.master, next_frame_info)
+
+        if self._expression_box.winfo_ismapped():
+            dialog.title(self._expression_box.get_focused_text())
         else:
-            dialog = FunctionCallDialog(self._text.master, next_frame_info)
+            dialog.title(tr("Function call at %s") % hex(self._frame_id))
 
-            if self._expression_box.winfo_ismapped():
-                dialog.title(self._expression_box.get_focused_text())
-            else:
-                dialog.title(tr("Function call at %s") % hex(self._frame_id))
-
-            return dialog
+        return dialog
 
     def bring_out_frame(self, frame_id):
         if self._frame_id == frame_id:
@@ -637,13 +625,10 @@ class BaseExpressionBox:
             wrap=tk.NONE,
             font="EditorFont",
         )
-        opts.update(get_syntax_options_for_tag("expression_box"))
+        opts |= get_syntax_options_for_tag("expression_box")
         return opts
 
     def update_expression(self, msg, frame_info):
-        focus = frame_info.focus
-        event = frame_info.event
-
         if frame_info.current_root_expression is not None:
             if self._last_root_expression != frame_info.current_root_expression:
                 # can happen, eg. when focus jumps from the last expr in while body
@@ -664,7 +649,10 @@ class BaseExpressionBox:
             )
             for subrange, value in frame_info.current_evaluations:
                 self._replace(subrange, value)
+            event = frame_info.event
+
             if "expression" in event:
+                focus = frame_info.focus
                 # Event may be also after_statement_again
                 self._highlight_range(
                     focus,
@@ -719,7 +707,7 @@ class BaseExpressionBox:
         else:
             value_str = shorten_repr(value.repr, 100)
 
-        object_tag = "object_" + str(value.id)
+        object_tag = f"object_{str(value.id)}"
         self.text.insert(start_mark, value_str, ("value", object_tag))
         if misc_utils.running_on_mac_os():
             sequence = "<Command-Button-1>"
@@ -751,7 +739,7 @@ class BaseExpressionBox:
             else:
                 local_col_offset = col_offset
 
-            return str(local_lineno) + "." + str(local_col_offset)
+            return f"{str(local_lineno)}.{str(local_col_offset)}"
 
         for node in ast.walk(main_node):
             if "lineno" in node._attributes and hasattr(node, "end_lineno"):
@@ -759,19 +747,19 @@ class BaseExpressionBox:
                 index2 = _create_index(node.end_lineno, node.end_col_offset)
 
                 start_mark = self._get_mark_name(node.lineno, node.col_offset)
-                if not start_mark in self.text.mark_names():
+                if start_mark not in self.text.mark_names():
                     self.text.mark_set(start_mark, index1)
                     # print("Creating mark", start_mark, index1)
                     self.text.mark_gravity(start_mark, tk.LEFT)
 
                 end_mark = self._get_mark_name(node.end_lineno, node.end_col_offset)
-                if not end_mark in self.text.mark_names():
+                if end_mark not in self.text.mark_names():
                     self.text.mark_set(end_mark, index2)
                     # print("Creating mark", end_mark, index2)
                     self.text.mark_gravity(end_mark, tk.RIGHT)
 
     def _get_mark_name(self, lineno, col_offset):
-        return str(lineno) + "_" + str(col_offset)
+        return f"{str(lineno)}_{str(col_offset)}"
 
     def _get_tag_name(self, node_or_text_range):
         return (
@@ -807,7 +795,9 @@ class BaseExpressionBox:
     def _update_position(self, text_range):
         self._codeview.update_idletasks()
         text_line_number = text_range.lineno - self._codeview._first_line_number + 1
-        bbox = self._codeview.text.bbox(str(text_line_number) + "." + str(text_range.col_offset))
+        bbox = self._codeview.text.bbox(
+            f"{str(text_line_number)}.{str(text_range.col_offset)}"
+        )
 
         if isinstance(bbox, tuple):
             x = bbox[0] - self._codeview.text.cget("padx") + 6
@@ -861,18 +851,17 @@ class ToplevelExpressionBox(BaseExpressionBox, tk.Toplevel):
         BaseExpressionBox.__init__(self, codeview, text)
         self.text.grid()
 
-        if running_on_mac_os():
-            try:
-                # NB! Must be the first thing to do after creation
-                # https://wiki.tcl-lang.org/page/MacWindowStyle
-                self.tk.call(
-                    "::tk::unsupported::MacWindowStyle", "style", self._w, "help", "noActivates"
-                )
-            except TclError:
-                pass
-        else:
+        if not running_on_mac_os():
             raise RuntimeError("Should be used only on Mac")
 
+        try:
+            # NB! Must be the first thing to do after creation
+            # https://wiki.tcl-lang.org/page/MacWindowStyle
+            self.tk.call(
+                "::tk::unsupported::MacWindowStyle", "style", self._w, "help", "noActivates"
+            )
+        except TclError:
+            pass
         self.resizable(False, False)
         if get_tk_version_info() >= (8, 6, 10) and running_on_mac_os():
             # self.wm_overrideredirect(1) # Tkinter wrapper can give error in 3.9.2
@@ -926,12 +915,7 @@ class DialogVisualizer(CommonDialog, FrameVisualizer):
             position_reference = master.winfo_toplevel()
 
         self.geometry(
-            "{}x{}+{}+{}".format(
-                editor_notebook.winfo_width(),
-                editor_notebook.winfo_height() - 20,
-                position_reference.winfo_rootx(),
-                position_reference.winfo_rooty(),
-            )
+            f"{editor_notebook.winfo_width()}x{editor_notebook.winfo_height() - 20}+{position_reference.winfo_rootx()}+{position_reference.winfo_rooty()}"
         )
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.bind("<FocusIn>", self._on_focus, True)
@@ -1052,7 +1036,9 @@ class StackView(ui_utils.TreeFrame):
             node_id = self.tree.insert("", "end")
             self.tree.set(node_id, "function", frame.code_name)
             self.tree.set(
-                node_id, "location", "%s, line %s" % (os.path.basename(frame.filename), lineno)
+                node_id,
+                "location",
+                f"{os.path.basename(frame.filename)}, line {lineno}",
             )
             self.tree.set(node_id, "id", frame.id)
 
@@ -1074,11 +1060,10 @@ class StackView(ui_utils.TreeFrame):
 
     def on_select(self, event):
         iid = self.tree.focus()
-        if iid != "":
+        if iid != "" and _current_debugger is not None:
             # assuming id is in the last column
             frame_id = self.tree.item(iid)["values"][-1]
-            if _current_debugger is not None:
-                _current_debugger.bring_out_frame(frame_id)
+            _current_debugger.bring_out_frame(frame_id)
 
 
 class ExceptionView(TextFrame):

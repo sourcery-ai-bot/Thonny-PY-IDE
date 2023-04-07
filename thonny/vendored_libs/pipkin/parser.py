@@ -319,7 +319,4 @@ def parse_arguments(raw_args: Optional[List[str]] = None) -> Any:
 
     cache_parser.add_argument("cache_command", choices=["dir", "info", "list", "purge"])
 
-    args = main_parser.parse_args(args=raw_args)
-
-    # print("ARGS", args)
-    return args
+    return main_parser.parse_args(args=raw_args)

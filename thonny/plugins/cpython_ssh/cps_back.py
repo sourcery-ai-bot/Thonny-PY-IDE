@@ -52,7 +52,7 @@ class SshCPythonBackend(BaseBackend, SshMixin):
                 self._cwd = cmd["expected_cwd"]
             self._restart_main_backend()
 
-        handler = getattr(self, "_cmd_" + cmd.name, None)
+        handler = getattr(self, f"_cmd_{cmd.name}", None)
         if handler is not None:
             # SFTP methods defined in SshMixin
             try:
@@ -162,7 +162,7 @@ class SshCPythonBackend(BaseBackend, SshMixin):
             return
 
         ensure_posix_directory(
-            launch_dir + "/thonny/plugins/cpython_backend",
+            f"{launch_dir}/thonny/plugins/cpython_backend",
             self._get_stat_mode_for_upload,
             self._mkdir_for_upload,
         )

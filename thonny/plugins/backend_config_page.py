@@ -176,10 +176,14 @@ class BaseSshProxyConfigPage(BackendDetailsConfigPage):
         inner_pad = ems_to_pixels(0.6)
 
         self._host_var = self._add_text_field(
-            "Host", self.backend_name + ".host", 1, pady=(0, inner_pad), width=20
+            "Host", f"{self.backend_name}.host", 1, pady=(0, inner_pad), width=20
         )
         self._user_var = self._add_text_field(
-            "Username", self.backend_name + ".user", 3, pady=(0, inner_pad), width=20
+            "Username",
+            f"{self.backend_name}.user",
+            3,
+            pady=(0, inner_pad),
+            width=20,
         )
 
         from thonny.misc_utils import (
@@ -190,15 +194,19 @@ class BaseSshProxyConfigPage(BackendDetailsConfigPage):
 
         self._method_var = self._add_combobox_field(
             "Authentication method",
-            self.backend_name + ".auth_method",
+            f"{self.backend_name}.auth_method",
             5,
-            [PASSWORD_METHOD, PUBLIC_KEY_NO_PASS_METHOD, PUBLIC_KEY_WITH_PASS_METHOD],
+            [
+                PASSWORD_METHOD,
+                PUBLIC_KEY_NO_PASS_METHOD,
+                PUBLIC_KEY_WITH_PASS_METHOD,
+            ],
             pady=(0, inner_pad),
             width=30,
         )
         self._interpreter_var = self._add_text_field(
             "Interpreter",
-            self.backend_name + ".executable",
+            f"{self.backend_name}.executable",
             row=30,
             pady=(2 * inner_pad, inner_pad),
             width=30,
@@ -220,17 +228,19 @@ class BaseSshProxyConfigPage(BackendDetailsConfigPage):
 
     def apply(self):
         if self._changed:
-            get_workbench().set_option(self.backend_name + ".host", self._host_var.get())
-            get_workbench().set_option(self.backend_name + ".user", self._user_var.get())
-            get_workbench().set_option(self.backend_name + ".auth_method", self._method_var.get())
+            get_workbench().set_option(f"{self.backend_name}.host", self._host_var.get())
+            get_workbench().set_option(f"{self.backend_name}.user", self._user_var.get())
             get_workbench().set_option(
-                self.backend_name + ".executable", self._interpreter_var.get()
+                f"{self.backend_name}.auth_method", self._method_var.get()
+            )
+            get_workbench().set_option(
+                f"{self.backend_name}.executable", self._interpreter_var.get()
             )
 
             delete_stored_ssh_password()
 
             # reset cwd setting to default
-            get_workbench().set_option(self.backend_name + ".cwd", "")
+            get_workbench().set_option(f"{self.backend_name}.cwd", "")
 
     def should_restart(self):
         return self._changed
@@ -253,7 +263,7 @@ class PasswordDialog(CommonDialogEx):
             assert method == PASSWORD_METHOD
             prompt = tr("Enter your password for\n{}")
 
-        prompt = prompt.format(user + "@" + host)
+        prompt = prompt.format(f"{user}@{host}")
 
         self.prompt_label = ttk.Label(self.main_frame, text=prompt)
         self.prompt_label.grid(row=1, column=1, columnspan=2, padx=margin, pady=(margin, spacing))
@@ -306,9 +316,9 @@ class PasswordDialog(CommonDialogEx):
 
 
 def get_ssh_password(conf_group):
-    host = get_workbench().get_option(conf_group + ".host")
-    user = get_workbench().get_option(conf_group + ".user")
-    method = get_workbench().get_option(conf_group + ".auth_method")
+    host = get_workbench().get_option(f"{conf_group}.host")
+    user = get_workbench().get_option(f"{conf_group}.user")
+    method = get_workbench().get_option(f"{conf_group}.auth_method")
     if method == PUBLIC_KEY_NO_PASS_METHOD:
         return None
     elif os.path.exists(get_ssh_password_file_path()):

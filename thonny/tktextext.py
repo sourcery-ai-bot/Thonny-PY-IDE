@@ -24,7 +24,7 @@ class TweakableText(tk.Text):
         self._edit_count: int = 0
         self._last_operation_time: float = time.time()
 
-        self._original_widget_name = self._w + "_orig"
+        self._original_widget_name = f"{self._w}_orig"
         self.tk.call("rename", self._w, self._original_widget_name)
         self.tk.createcommand(self._w, self._dispatch_tk_operation)
         self._tk_proxies = {}
@@ -58,18 +58,15 @@ class TweakableText(tk.Text):
                 and args in [("sel.first", "sel.last"), ("sel.first",)]
             ):
                 pass
-            # Don't worry about hitting ends of undo/redo stacks
             elif (
-                operation == "edit"
-                and args in [("undo",), ("redo",)]
-                and str(e).lower() == "nothing to " + args[0]
+                operation != "edit"
+                or args not in [("undo",), ("redo",)]
+                or str(e).lower() != f"nothing to {args[0]}"
             ):
-                pass
-            else:
                 logger.exception(
-                    "[_dispatch_tk_operation] operation: " + operation + ", args:" + repr(args)
+                    f"[_dispatch_tk_operation] operation: {operation}, args:{repr(args)}"
                 )
-                # traceback.print_exc()
+                        # traceback.print_exc()
 
             return ""  # Taken from idlelib.WidgetRedirector
 
@@ -141,9 +138,7 @@ class TweakableText(tk.Text):
 
         if self.is_read_only():
             self.bell()
-        elif self._is_erroneous_delete(index1, index2):
-            pass
-        else:
+        elif not self._is_erroneous_delete(index1, index2):
             self.direct_delete(index1, index2, **kw)
 
     def _is_erroneous_delete(self, index1, index2):
@@ -158,16 +153,10 @@ class TweakableText(tk.Text):
 
     def index_sel_first(self):
         # Tk will give error without this check
-        if self.tag_ranges("sel"):
-            return self.index("sel.first")
-        else:
-            return None
+        return self.index("sel.first") if self.tag_ranges("sel") else None
 
     def index_sel_last(self):
-        if self.tag_ranges("sel"):
-            return self.index("sel.last")
-        else:
-            return None
+        return self.index("sel.last") if self.tag_ranges("sel") else None
 
     def has_selection(self):
         return len(self.tag_ranges("sel")) > 0
@@ -251,10 +240,7 @@ class EnhancedText(TweakableText):
     def _bind_editing_aids(self):
         def if_not_readonly(fun):
             def dispatch(event):
-                if not self.is_read_only():
-                    return fun(event)
-                else:
-                    return "break"
+                return "break" if self.is_read_only() else fun(event)
 
             return dispatch
 
@@ -363,7 +349,7 @@ class EnhancedText(TweakableText):
 
     def select_lines(self, first_line, last_line):
         self.tag_remove("sel", "1.0", tk.END)
-        self.tag_add("sel", "%s.0" % first_line, "%s.end" % last_line)
+        self.tag_add("sel", f"{first_line}.0", f"{last_line}.end")
 
     def delete_word_left(self, event):
         self.event_generate("<Meta-Delete>")
@@ -414,9 +400,7 @@ class EnhancedText(TweakableText):
         # else:
         last_line_of_prompt = ""
         ncharsdeleted = 0
-        while 1:
-            if chars == last_line_of_prompt:
-                break
+        while 1 and chars != last_line_of_prompt:
             chars = chars[:-1]
             ncharsdeleted = ncharsdeleted + 1
             have = len(chars.expandtabs(self.tabwidth))
@@ -488,7 +472,7 @@ class EnhancedText(TweakableText):
             row, _ = map(int, last_visible_idx.split("."))
             line_count = self.get_line_count()
 
-            if row == line_count or row == line_count - 1:  # otherwise tk doesn't show last line
+            if row in [line_count, line_count - 1]:  # otherwise tk doesn't show last line
                 self.mark_set("insert", "end")
         except Exception as e:
             logger.exception("Could not perform page down", exc_info=e)
@@ -517,7 +501,7 @@ class EnhancedText(TweakableText):
         lineat = int(self.index("insert").split(".")[1])
         if insertpt == lineat:
             insertpt = 0
-        return "insert linestart+" + str(insertpt) + "c"
+        return f"insert linestart+{str(insertpt)}c"
 
     def perform_smart_home(self, event):
         if (event.state & 4) != 0 and event.keysym == "Home":
@@ -533,11 +517,10 @@ class EnhancedText(TweakableText):
             if not self.index_sel_first():
                 # there was no previous selection
                 self.mark_set("my_anchor", "insert")
+            elif self.compare(self.index_sel_first(), "<", self.index("insert")):
+                self.mark_set("my_anchor", "sel.first")  # extend back
             else:
-                if self.compare(self.index_sel_first(), "<", self.index("insert")):
-                    self.mark_set("my_anchor", "sel.first")  # extend back
-                else:
-                    self.mark_set("my_anchor", "sel.last")  # extend forward
+                self.mark_set("my_anchor", "sel.last")  # extend forward
             first = self.index(dest)
             last = self.index("my_anchor")
             if self.compare(first, ">", last):
@@ -569,16 +552,16 @@ class EnhancedText(TweakableText):
 
     def perform_tab(self, event=None):
         self._log_keypress_for_undo(event)
-        if event.state & 0x0001:  # shift is pressed (http://stackoverflow.com/q/32426250/261181)
+        if event.state & 0x0001:
             return self.dedent_region(event)
-        else:
-            # check whether there are letters before cursor on this line
-            index = self.index("insert")
-            left_text = self.get(index + " linestart", index)
-            if left_text.strip() == "" or self.has_selection():
-                return self.perform_smart_tab(event)
-            else:
-                return self.perform_midline_tab(event)
+        # check whether there are letters before cursor on this line
+        index = self.index("insert")
+        left_text = self.get(f"{index} linestart", index)
+        return (
+            self.perform_smart_tab(event)
+            if left_text.strip() == "" or self.has_selection()
+            else self.perform_midline_tab(event)
+        )
 
     def indent_region(self, event=None):
         return self._change_indentation(True)
@@ -598,8 +581,7 @@ class EnhancedText(TweakableText):
                 self.insert("end", "\n")
 
         for pos in range(len(lines)):
-            line = lines[pos]
-            if line:
+            if line := lines[pos]:
                 raw, effective = classifyws(line, self.tabwidth)
                 if increase:
                     effective = effective + self.indent_width
@@ -633,8 +615,8 @@ class EnhancedText(TweakableText):
     def _get_region(self):
         first, last = self.get_selection_indices()
         if first and last:
-            head = self.index(first + " linestart")
-            tail = self.index(last + "-1c lineend +1c")
+            head = self.index(f"{first} linestart")
+            tail = self.index(f"{last}-1c lineend +1c")
         else:
             head = self.index("insert linestart")
             tail = self.index("insert lineend +1c")
@@ -681,12 +663,10 @@ class EnhancedText(TweakableText):
             return "other_key"
 
     def _make_blanks(self, n):
-        # Make string that displays as n leading blanks.
-        if self.should_indent_with_tabs():
-            ntabs, nspaces = divmod(n, self.tabwidth)
-            return "\t" * ntabs + " " * nspaces
-        else:
+        if not self.should_indent_with_tabs():
             return " " * n
+        ntabs, nspaces = divmod(n, self.tabwidth)
+        return "\t" * ntabs + " " * nspaces
 
     def _on_undo(self, e):
         self._last_event_kind = "undo"
@@ -740,7 +720,7 @@ class EnhancedText(TweakableText):
         if self._should_tag_current_line and not self.is_read_only():
             # we may be on the same line as with prev event but tag needs extension
             lineno = int(self.index("insert").split(".")[0])
-            self.tag_add("current_line", str(lineno) + ".0", str(lineno + 1) + ".0")
+            self.tag_add("current_line", f"{lineno}.0", f"{str(lineno + 1)}.0")
 
     def on_secondary_click(self, event=None):
         "Use this for invoking context menu"
@@ -760,13 +740,11 @@ class EnhancedText(TweakableText):
         #    states.append("focus")
 
         if "background" not in self._initial_configuration:
-            background = style.lookup(self._style, "background", states)
-            if background:
+            if background := style.lookup(self._style, "background", states):
                 self.configure(background=background)
 
         if "foreground" not in self._initial_configuration:
-            foreground = style.lookup(self._style, "foreground", states)
-            if foreground:
+            if foreground := style.lookup(self._style, "foreground", states):
                 self.configure(foreground=foreground)
                 self.configure(insertbackground=foreground)
 
@@ -815,8 +793,7 @@ class TextFrame(ttk.Frame):
             "inactiveselectbackground": "gray",
             "padx": 5,
             "pady": 5,
-        }
-        final_text_options.update(text_options)
+        } | text_options
         self.text = text_class(self, **final_text_options)
 
         if vertical_scrollbar:
@@ -1055,7 +1032,7 @@ class EnhancedTextFrame(TextFrame):
                         for content, tags in self.compute_gutter_line(i):
                             self._gutter.insert("end-1c", content, ("content",) + tags)
             else:
-                self._gutter.delete(line2index(text_line_count) + "-1c", "end-1c")
+                self._gutter.delete(f"{line2index(text_line_count)}-1c", "end-1c")
 
             self._gutter.config(state="disabled")
 
@@ -1073,7 +1050,7 @@ class EnhancedTextFrame(TextFrame):
     def _update_gutter_active_line(self):
         self._gutter.tag_remove("active", "1.0", "end")
         insert = self.text.index("insert")
-        self._gutter.tag_add("active", insert + " linestart", insert + " lineend")
+        self._gutter.tag_add("active", f"{insert} linestart", f"{insert} lineend")
 
     def compute_gutter_line(self, lineno, plain=False):
         yield str(lineno), ()
@@ -1116,9 +1093,9 @@ class EnhancedTextFrame(TextFrame):
 
     def on_gutter_click(self, event=None):
         try:
-            linepos = self._gutter.index("@%s,%s" % (event.x, event.y)).split(".")[0]
-            self.text.mark_set("insert", "%s.0" % linepos)
-            self._gutter.mark_set("gutter_selection_start", "%s.0" % linepos)
+            linepos = self._gutter.index(f"@{event.x},{event.y}").split(".")[0]
+            self.text.mark_set("insert", f"{linepos}.0")
+            self._gutter.mark_set("gutter_selection_start", f"{linepos}.0")
             if (
                 event.type == "4"
             ):  # In Python 3.6 you can use tk.EventType.ButtonPress instead of "4"
@@ -1138,12 +1115,12 @@ class EnhancedTextFrame(TextFrame):
         try:
             if "gutter_selection_start" not in self._gutter.mark_names():
                 return
-            linepos = int(self._gutter.index("@%s,%s" % (event.x, event.y)).split(".")[0])
+            linepos = int(self._gutter.index(f"@{event.x},{event.y}").split(".")[0])
             gutter_selection_start = int(self._gutter.index("gutter_selection_start").split(".")[0])
             self.text.select_lines(
                 min(gutter_selection_start, linepos), max(gutter_selection_start - 1, linepos - 1)
             )
-            self.text.mark_set("insert", "%s.0" % linepos)
+            self.text.mark_set("insert", f"{linepos}.0")
             self.text.focus_set()
         except tk.TclError:
             logger.exception("on_gutter_motion")
@@ -1174,22 +1151,17 @@ class EnhancedTextFrame(TextFrame):
 
     def _reload_gutter_theme_options(self, event=None):
         style = ttk.Style()
-        background = style.lookup("GUTTER", "background")
-        if background:
+        if background := style.lookup("GUTTER", "background"):
             self._gutter.configure(background=background, selectbackground=background)
             self._margin_line.configure(background=background)
 
-        foreground = style.lookup("GUTTER", "foreground")
-        if foreground:
+        if foreground := style.lookup("GUTTER", "foreground"):
             self._gutter.configure(foreground=foreground, selectforeground=foreground)
 
 
 def get_text_font(text):
     font = text["font"]
-    if isinstance(font, str):
-        return tkfont.nametofont(font)
-    else:
-        return font
+    return tkfont.nametofont(font) if isinstance(font, str) else font
 
 
 def classifyws(s, tabwidth):
@@ -1257,11 +1229,7 @@ def get_keyboard_language():
     thread_id = user32.GetWindowThreadProcessId(curr_window, 0)
     # Made up of 0xAAABBBB, AAA = HKL (handle object) & BBBB = language ID
     klid = user32.GetKeyboardLayout(thread_id)
-    # Language ID -> low 10 bits, Sub-language ID -> high 6 bits
-    # Extract language ID from KLID
-    lid = klid & (2**16 - 1)
-
-    return lid
+    return klid & (2**16 - 1)
 
 
 _windows_altgr_chars_by_lang_id_and_keycode = {

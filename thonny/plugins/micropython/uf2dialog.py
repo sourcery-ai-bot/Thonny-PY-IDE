@@ -133,8 +133,7 @@ class Uf2FlashingDialog(WorkDialog):
         result = {}
         for path in paths:
             try:
-                target_info = self.create_target_info(path)
-                if target_info:
+                if target_info := self.create_target_info(path):
                     result[target_info.title] = target_info
             except:
                 # the disk may have been ejected during read or smth like this
@@ -226,12 +225,12 @@ class Uf2FlashingDialog(WorkDialog):
             for variant in populars.values():
                 popular_variant = variant.copy()
                 # need different title to distinguish it from the same item in ALL VARIANTS
-                popular_title = self._create_variant_description(variant) + " "
+                popular_title = f"{self._create_variant_description(variant)} "
                 popular_variant["title"] = popular_title
                 enhanced_mapping[popular_title] = popular_variant
 
             enhanced_mapping["--- ALL VARIANTS " + "-" * 100] = {}
-            enhanced_mapping.update(filtered_mapping)
+            enhanced_mapping |= filtered_mapping
         else:
             enhanced_mapping = filtered_mapping
 
@@ -250,7 +249,7 @@ class Uf2FlashingDialog(WorkDialog):
     def _present_versions_for_variant(self, variant: Dict[str, Any]) -> None:
         versions_mapping = {d["version"]: d for d in variant["downloads"]}
         self._version_combo.set_mapping(versions_mapping)
-        if len(versions_mapping) > 0:
+        if versions_mapping:
             self._version_combo.select_value(list(versions_mapping.values())[0])
         else:
             self._version_combo.select_none()
@@ -271,10 +270,12 @@ class Uf2FlashingDialog(WorkDialog):
 
         # Compare set of words both with and without considering the possibility that one of them
         # may have vendor name added and other not.
-        return self._extract_normalized_words(target.model) == self._extract_normalized_words(
+        return self._extract_normalized_words(
+            target.model
+        ) == self._extract_normalized_words(
             variant["model"]
         ) or self._extract_normalized_words(
-            target.model + " " + variant["vendor"]
+            f"{target.model} " + variant["vendor"]
         ) == self._extract_normalized_words(
             variant["model"] + " " + variant["vendor"]
         )
@@ -283,15 +284,14 @@ class Uf2FlashingDialog(WorkDialog):
         return set(text.replace("_", " ").replace("-", "").lower().split())
 
     def describe_target_path(self, path: str) -> str:
-        if sys.platform == "win32":
-            try:
-                label = get_win_volume_name(path)
-                disk = path.strip("\\")
-                return f"{label} ({disk})"
-            except:
-                logger.error("Could not query volume name for %r", path)
-                return path
-        else:
+        if sys.platform != "win32":
+            return path
+        try:
+            label = get_win_volume_name(path)
+            disk = path.strip("\\")
+            return f"{label} ({disk})"
+        except:
+            logger.error("Could not query volume name for %r", path)
             return path
 
     def create_target_info(self, path: str) -> Optional[TargetInfo]:
@@ -308,13 +308,21 @@ class Uf2FlashingDialog(WorkDialog):
         if "boardid:rpirp2" in normalized_content:
             family = "rp2"
         else:
-            for keyword in ["samd21", "samd51", "nrf51", "nrf52", "esp32s3", "esp32s3"]:
-                if keyword in normalized_content:
-                    family = keyword
-                    break
-            else:
-                family = None
-
+            family = next(
+                (
+                    keyword
+                    for keyword in [
+                        "samd21",
+                        "samd51",
+                        "nrf51",
+                        "nrf52",
+                        "esp32s3",
+                        "esp32s3",
+                    ]
+                    if keyword in normalized_content
+                ),
+                None,
+            )
         return TargetInfo(
             title=self.describe_target_path(path),
             path=path,
@@ -367,8 +375,7 @@ class Uf2FlashingDialog(WorkDialog):
         latest_prerelease_substitute = None
         latest_prerelease_regex: str
         for variant in variants:
-            new_regex = variant.get("latest_prerelease_regex", None)
-            if new_regex:
+            if new_regex := variant.get("latest_prerelease_regex", None):
                 latest_prerelease_regex = new_regex
                 import json
                 import urllib.request
@@ -387,9 +394,8 @@ class Uf2FlashingDialog(WorkDialog):
                         html_str = fp.read().decode("UTF-8", errors="replace")
                         # logger.debug("Variants info: %r", json_str)
 
-                    match = re.search(latest_prerelease_regex, html_str)
-                    if match:
-                        latest_prerelease_substitute = match.group(0)
+                    if match := re.search(latest_prerelease_regex, html_str):
+                        latest_prerelease_substitute = match[0]
                         logger.info(
                             "Using %r as prerelease substitute", latest_prerelease_substitute
                         )
@@ -404,7 +410,7 @@ class Uf2FlashingDialog(WorkDialog):
 
             if latest_prerelease_substitute:
                 assert latest_prerelease_regex
-                for i, download in enumerate(variant["downloads"]):
+                for download in variant["downloads"]:
                     patched_url = re.sub(
                         latest_prerelease_regex, latest_prerelease_substitute, download["url"]
                     )
@@ -546,7 +552,7 @@ class Uf2FlashingDialog(WorkDialog):
                         else:
                             logger.exception("Could not fsync")
                     percent_str = "%.0f%%" % (bytes_copied / size * 100)
-                    self.set_action_text("Copying... " + percent_str)
+                    self.set_action_text(f"Copying... {percent_str}")
                     self.report_progress(bytes_copied, size)
                     self.replace_last_line(percent_str)
 
@@ -560,8 +566,7 @@ class Uf2FlashingDialog(WorkDialog):
         step = 0.2
         while wait_time < 10:
             new_ports = list_serial_port_infos()
-            added_ports = set(new_ports) - set(old_ports)
-            if added_ports:
+            if added_ports := set(new_ports) - set(old_ports):
                 for p in added_ports:
                     self.append_text("Found port %s\n" % p)
                     self.set_action_text("Found port")
@@ -570,24 +575,22 @@ class Uf2FlashingDialog(WorkDialog):
                 return
             time.sleep(step)
             wait_time += step
-        else:
-            logger.debug("Ports after: %s", list_serial_port_infos())
-            self.set_action_text("Warning: Could not find port")
-            self.append_text("Warning: Could not find port in %s seconds\n" % int(wait_time))
-            # leave some time to see the warning
-            time.sleep(2)
+        logger.debug("Ports after: %s", list_serial_port_infos())
+        self.set_action_text("Warning: Could not find port")
+        self.append_text("Warning: Could not find port in %s seconds\n" % int(wait_time))
+        # leave some time to see the warning
+        time.sleep(2)
 
     def perform_post_installation_steps(self, ports_before):
         self._wait_for_new_ports(ports_before)
 
 
 def find_uf2_property(lines: List[str], prop_name: str) -> Optional[str]:
-    marker = prop_name + ": "
-    for line in lines:
-        if line.startswith(marker):
-            return line[len(marker) :]
-
-    return None
+    marker = f"{prop_name}: "
+    return next(
+        (line[len(marker) :] for line in lines if line.startswith(marker)),
+        None,
+    )
 
 
 def show_uf2_installer(master, firmware_name: str) -> None:

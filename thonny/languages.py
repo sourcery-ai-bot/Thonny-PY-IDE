@@ -57,10 +57,7 @@ def get_button_padding():
     from thonny import get_workbench
 
     code = get_workbench().get_option("general.language")
-    if code in BUTTON_PADDING_SIZES:
-        return BUTTON_PADDING_SIZES[code] * " "
-    else:
-        return ""
+    return BUTTON_PADDING_SIZES[code] * " " if code in BUTTON_PADDING_SIZES else ""
 
 
 def get_language_code_by_name(name):
@@ -68,7 +65,7 @@ def get_language_code_by_name(name):
         if LANGUAGES_DICT[code] == name:
             return code
 
-    raise RuntimeError("Unknown language name '%s'" % name)
+    raise RuntimeError(f"Unknown language name '{name}'")
 
 
 def tr(message: str) -> str:

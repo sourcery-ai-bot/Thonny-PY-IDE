@@ -27,7 +27,7 @@ def pix():
         ("right", "Horizontal.Scrollbar.rightarrow"),
     ]:
         # load the image
-        img_name = "scrollbar-button-" + direction
+        img_name = f"scrollbar-button-{direction}"
         for suffix in ["", "-insens"]:
             get_workbench().get_image(
                 os.path.join(res_dir, img_name + suffix + ".png"), img_name + suffix
@@ -38,7 +38,7 @@ def pix():
                 "image",
                 img_name,
                 ("!disabled", img_name),
-                ("disabled", img_name + "-insens"),
+                ("disabled", f"{img_name}-insens"),
             )
         }
 
@@ -47,7 +47,11 @@ def pix():
         "Toolbutton": {
             "configure": {"borderwidth": 1},
             "map": {
-                "relief": [("disabled", "flat"), ("hover", "groove"), ("!hover", "flat")],
+                "relief": [
+                    ("disabled", "flat"),
+                    ("hover", "groove"),
+                    ("!hover", "flat"),
+                ],
                 "background": [
                     ("disabled", MAIN_BACKGROUND),
                     ("!hover", MAIN_BACKGROUND),
@@ -65,11 +69,19 @@ def pix():
             "map": {"foreground": [("active", "black")]},
         },
         "TNotebook.Tab": {
-            "map": {"background": [("!selected", detail_bg), ("selected", MAIN_BACKGROUND)]}
+            "map": {
+                "background": [
+                    ("!selected", detail_bg),
+                    ("selected", MAIN_BACKGROUND),
+                ]
+            }
         },
         "ButtonNotebook.TNotebook.Tab": {
             "map": {
-                "background": [("!selected", detail_bg), ("selected", MAIN_BACKGROUND)],
+                "background": [
+                    ("!selected", detail_bg),
+                    ("selected", MAIN_BACKGROUND),
+                ],
                 "padding": [
                     ("selected", [scale(4), scale(2), scale(4), scale(3)]),
                     ("!selected", [scale(4), scale(2), scale(4), scale(3)]),
@@ -100,8 +112,14 @@ def pix():
                     {
                         "sticky": "ns",
                         "children": [
-                            ("Vertical.Scrollbar.uparrow", {"side": "top", "sticky": ""}),
-                            ("Vertical.Scrollbar.downarrow", {"side": "bottom", "sticky": ""}),
+                            (
+                                "Vertical.Scrollbar.uparrow",
+                                {"side": "top", "sticky": ""},
+                            ),
+                            (
+                                "Vertical.Scrollbar.downarrow",
+                                {"side": "bottom", "sticky": ""},
+                            ),
                             (
                                 "Vertical.Scrollbar.padding",
                                 {
@@ -126,8 +144,14 @@ def pix():
                     {
                         "sticky": "we",
                         "children": [
-                            ("Horizontal.Scrollbar.leftarrow", {"side": "left", "sticky": ""}),
-                            ("Horizontal.Scrollbar.rightarrow", {"side": "right", "sticky": ""}),
+                            (
+                                "Horizontal.Scrollbar.leftarrow",
+                                {"side": "left", "sticky": ""},
+                            ),
+                            (
+                                "Horizontal.Scrollbar.rightarrow",
+                                {"side": "right", "sticky": ""},
+                            ),
                             (
                                 "Horizontal.Scrollbar.padding",
                                 {
@@ -181,13 +205,17 @@ def pix():
                 "pady": 10,
             }
         },
-        "Tip.TLabel": {"configure": {"background": detail_bg2, "foreground": "black"}},
+        "Tip.TLabel": {
+            "configure": {"background": detail_bg2, "foreground": "black"}
+        },
         "Tip.TFrame": {"configure": {"background": detail_bg2}},
-        "OPTIONS": {"configure": {"icons_in_menus": False, "shortcuts_in_tooltips": False}},
-    }
-
-    settings.update(scrollbar_button_settings)
-
+        "OPTIONS": {
+            "configure": {
+                "icons_in_menus": False,
+                "shortcuts_in_tooltips": False,
+            }
+        },
+    } | scrollbar_button_settings
     # try to refine settings according to system configuration
     """Note that fonts are set globally, 
     ie. all themes will later inherit these"""
@@ -201,20 +229,20 @@ def pix():
                         if "sGtk/ColorScheme" in line:
                             if "selected_bg_color" in line:
                                 bgr = re.search(
-                                    r"selected_bg_color:#([0-9a-fA-F]*)", line, re.M
-                                ).group(
-                                    1
-                                )  # @UndefinedVariable
-                                color = "#" + bgr[0:2] + bgr[4:6] + bgr[8:10]
+                                    r"selected_bg_color:#([0-9a-fA-F]*)",
+                                    line,
+                                    re.M,
+                                )[1]
+                                color = f"#{bgr[:2]}{bgr[4:6]}{bgr[8:10]}"
                                 if is_good_color(color):
                                     settings["Menu"]["configure"]["activebackground"] = color
                             if "selected_fg_color" in line:
                                 fgr = re.search(
-                                    r"selected_fg_color:#([0-9a-fA-F]*)", line, re.M
-                                ).group(
-                                    1
-                                )  # @UndefinedVariable
-                                color = "#" + fgr[0:2] + fgr[4:6] + fgr[8:10]
+                                    r"selected_fg_color:#([0-9a-fA-F]*)",
+                                    line,
+                                    re.M,
+                                )[1]
+                                color = f"#{fgr[:2]}{fgr[4:6]}{fgr[8:10]}"
                                 if is_good_color(color):
                                     settings["Menu"]["configure"]["activeforeground"] = color
                 except Exception as e:
@@ -245,19 +273,11 @@ def update_fonts():
                             result = re.search(
                                 r"=([^0-9]*) ([0-9]*)", line, re.M
                             )  # @UndefinedVariable
-                            family = result.group(1)
-                            options["size"] = int(result.group(2))
+                            family = result[1]
+                            options["size"] = int(result[2])
 
-                            if re.search(r"\bBold\b", family):
-                                options["weight"] = "bold"
-                            else:
-                                options["weight"] = "normal"
-
-                            if re.search(r"\bItalic\b", family):
-                                options["slant"] = "italic"
-                            else:
-                                options["slant"] = "roman"
-
+                            options["weight"] = "bold" if re.search(r"\bBold\b", family) else "normal"
+                            options["slant"] = "italic" if re.search(r"\bItalic\b", family) else "roman"
                             options["family"] = family.replace(" Bold", "").replace(" Italic", "")
             except Exception as e:
                 logger.error("Could not update fonts", exc_info=e)
@@ -309,9 +329,8 @@ def load_plugin():
         }
 
     res_dir = os.path.join(os.path.dirname(__file__), "res")
-    theme_image_map = {}
-    for image in images:
-        theme_image_map[image] = os.path.join(res_dir, images[image])
-
+    theme_image_map = {
+        image: os.path.join(res_dir, images[image]) for image in images
+    }
     get_workbench().add_ui_theme("Raspberry Pi", "Enhanced Clam", pix, theme_image_map)
     get_workbench().add_ui_theme("Raspberry Pi Dark", "Clean Dark", pix_dark, theme_image_map)

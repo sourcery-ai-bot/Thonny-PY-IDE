@@ -106,11 +106,8 @@ class TodoView(ui_utils.TreeFrame):
         r_ex = r"^.*((#[\t ]*(TODO|BUG|FIXME|ERROR|NOTE|REMARK)([:\t ]*))(.*))$"
         r_match = re.compile(r_ex, re.IGNORECASE | re.MULTILINE)
 
-        line_no = 0
-        for line in new_source.splitlines():
-            line_no += 1
-            matches = r_match.finditer(line)
-            if matches:
+        for line_no, line in enumerate(new_source.splitlines(), start=1):
+            if matches := r_match.finditer(line):
                 for m in matches:
                     todo_text = m.groups()[0]
                     self.tree.insert("", "end", values=(line_no, todo_text))

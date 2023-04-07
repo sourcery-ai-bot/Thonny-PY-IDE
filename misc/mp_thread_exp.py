@@ -19,8 +19,9 @@ def forward_until(marker, must_include=None):
         print(b.decode("UTF-8"), end="")
 
     if must_include and must_include not in total:
-        raise RuntimeError("Did not find expected data in the output (%s)"
-                           % (total + s.read_all()))
+        raise RuntimeError(
+            f"Did not find expected data in the output ({total + s.read_all()})"
+        )
 
 
 def run_in_paste_mode(source):

@@ -58,7 +58,7 @@ if __name__ == "__main__":
     samd_info_dir = os.path.abspath("../../../../uf2-samdx1/boards")
 
     for name in os.listdir(samd_info_dir):
-        info_path = samd_info_dir + "/" + name + "/board_config.h"
+        info_path = f"{samd_info_dir}/{name}/board_config.h"
         if os.path.exists(info_path):
             update_info(existing_map, name, info_path)
 

@@ -85,10 +85,7 @@ class Control:
         Returns:
             Allowed deviation from zero speed and allowed deviation from the target (if no arguments are provided), None otherwise.
         """
-        if speed is None and position is None:
-            return (0, 0)
-        else:
-            return None
+        return (0, 0) if speed is None and position is None else None
 
     def stall_tolerances(self, speed: int = None, time: int = None) -> Tuple[int, int]:
         """
@@ -103,7 +100,4 @@ class Control:
         Returns:
             Threshold speed and time limit (if no arguments are provided), None otherwise.
         """
-        if speed is None and time is None:
-            return (0, 0)
-        else:
-            return None
+        return (0, 0) if speed is None and time is None else None

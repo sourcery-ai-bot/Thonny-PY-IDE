@@ -63,7 +63,7 @@ class VariablesView(VariablesFrame):
     def _handle_error_response(self, error_msg):
         self._clear_tree()
         logger.error("Error querying globals: %s", error_msg)
-        self.show_error("Could not query global variables: " + str(error_msg))
+        self.show_error(f"Could not query global variables: {str(error_msg)}")
 
     def _handle_toplevel_response(self, event):
         if "globals" in event:
@@ -79,7 +79,7 @@ class VariablesView(VariablesFrame):
         if module_name == "__main__":
             self._set_tab_caption(tr("Variables"))
         else:
-            self._set_tab_caption(tr("Variables") + " (%s)" % module_name)
+            self._set_tab_caption(tr("Variables") + f" ({module_name})")
 
         if is_active:
             self._last_active_info = (globals_, module_name)
@@ -101,7 +101,7 @@ class VariablesView(VariablesFrame):
             groups.insert(1, ("NONLOCALS", nonlocals))
 
         self.update_variables(groups)
-        self._set_tab_caption("Variables (%s)" % frame_name)
+        self._set_tab_caption(f"Variables ({frame_name})")
 
         if is_active:
             self._last_active_info = (locals_, globals_, freevars, frame_name)

@@ -35,10 +35,7 @@ def which(cmd, mode=os.F_OK | os.X_OK, path=None):
     # than referring to PATH directories. This includes checking relative to the
     # current directory, e.g. ./script
     if os.path.dirname(cmd):
-        if _access_check(cmd, mode):
-            return cmd
-        return None
-
+        return cmd if _access_check(cmd, mode) else None
     if path is None:
         path = os.environ.get("PATH", os.defpath)
     if not path:
@@ -50,7 +47,7 @@ def which(cmd, mode=os.F_OK | os.X_OK, path=None):
     seen = set()
     for dir_ in path:
         normdir = os.path.normcase(dir_)
-        if not normdir in seen:
+        if normdir not in seen:
             seen.add(normdir)
             for thefile in files:
                 name = os.path.join(dir_, thefile)
@@ -104,7 +101,7 @@ if parent_dir.startswith(os.path.dirname(__file__)):
 
 
 def print_task(desc):
-    print((desc + " ").ljust(70, ".") + " ", end="")
+    print(f"{desc} ".ljust(70, ".") + " ", end="")
 
 
 def get_desktop_path():
@@ -116,7 +113,7 @@ def get_desktop_path():
 
 # define directories
 source_dir = os.path.dirname(os.path.realpath(__file__))
-target_dir = parent_dir + "/thonny"
+target_dir = f"{parent_dir}/thonny"
 if target_dir.startswith("/home"):
     menu_dir = os.path.expanduser("~/.local/share/applications")
 else:
@@ -124,12 +121,12 @@ else:
 
 try:
     # handle reinstalling newer version
-    print_task("Copying files to " + target_dir)
+    print_task(f"Copying files to {target_dir}")
 
     if os.path.exists(target_dir):
         print()
         answer = input(
-            target_dir + " already exists. I need to clear it. Is it OK? [Y/n]: "
+            f"{target_dir} already exists. I need to clear it. Is it OK? [Y/n]: "
         ).strip()
         if not answer or answer.lower() in ["y", "yes"]:
             shutil.rmtree(target_dir)
@@ -138,14 +135,14 @@ try:
             exit(1)
 
     shutil.copytree(source_dir, target_dir, symlinks=True)  # Copy everything
-    shutil.rmtree(target_dir + "/templates")  # ... except templates
-    os.remove(target_dir + "/install")  # ... and installer
+    shutil.rmtree(f"{target_dir}/templates")
+    os.remove(f"{target_dir}/install")
     print("Done!")
 
-    menu_item_path = menu_dir + "/Thonny.desktop"
-    print_task("Creating start menu item (%s)" % menu_item_path)
+    menu_item_path = f"{menu_dir}/Thonny.desktop"
+    print_task(f"Creating start menu item ({menu_item_path})")
     create_launcher(
-        source_dir + "/templates/Thonny.desktop",
+        f"{source_dir}/templates/Thonny.desktop",
         menu_item_path,
         {"$target_dir": target_dir},
     )
@@ -155,16 +152,16 @@ try:
     desktop_path = get_desktop_path()
 
     create_launcher(
-        source_dir + "/templates/Thonny.desktop",
-        desktop_path + "/Thonny.desktop",
+        f"{source_dir}/templates/Thonny.desktop",
+        f"{desktop_path}/Thonny.desktop",
         {"$target_dir": target_dir},
     )
     print("Done!")
 
-    uninstaller_path = target_dir + "/bin/uninstall"
-    print_task("Creating uninstaller (%s)" % uninstaller_path)
+    uninstaller_path = f"{target_dir}/bin/uninstall"
+    print_task(f"Creating uninstaller ({uninstaller_path})")
     create_launcher(
-        source_dir + "/templates/uninstall.sh",
+        f"{source_dir}/templates/uninstall.sh",
         uninstaller_path,
         {"$target_dir": target_dir, "$menu_dir": menu_dir},
     )
@@ -172,7 +169,12 @@ try:
 
     print_task("Compiling Python files")
     return_code = subprocess.call(
-        [target_dir + "/bin/python3.10", "-m", "compileall", target_dir + "/lib"]
+        [
+            f"{target_dir}/bin/python3.10",
+            "-m",
+            "compileall",
+            f"{target_dir}/lib",
+        ]
     )
     # TODO: why is return code 1 (eg. in 64-bit Fedora 22) even when everything seemed to succeed?
     print("Done!")
@@ -183,8 +185,8 @@ try:
 
     print()
     print("Installation was successful, you can start Thonny from start menu under")
-    print("Education or Programming, or by calling " + target_dir + "/bin/thonny")
-    print("For uninstalling Thonny call " + target_dir + "/bin/uninstall")
+    print(f"Education or Programming, or by calling {target_dir}/bin/thonny")
+    print(f"For uninstalling Thonny call {target_dir}/bin/uninstall")
 
 except OSError as e:
     print()

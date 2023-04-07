@@ -298,10 +298,10 @@ class MicroPythonBackend(MainBackend, ABC):
             remote += (-1,)  # unknown DST
             diff = int(time.mktime(this_computer) - time.mktime(remote))
             if abs(diff) > 10:
-                print("WARNING: Device's real-time clock seems to be off by %s seconds" % diff)
+                print(f"WARNING: Device's real-time clock seems to be off by {diff} seconds")
         else:
             assert isinstance(remote, str)
-            print("WARNING: Could not validate time: " + remote)
+            print(f"WARNING: Could not validate time: {remote}")
 
     def _get_utc_timetuple_from_device(self) -> Union[tuple, str]:
         raise NotImplementedError()
@@ -341,7 +341,7 @@ class MicroPythonBackend(MainBackend, ABC):
 
     def _handle_normal_command(self, cmd: CommandToBackend) -> None:
         logger.debug("Handling normal command '%s' in micropython backend ", cmd.name)
-        report_time("before " + cmd.name)
+        report_time(f"before {cmd.name}")
 
         if "local_cwd" in cmd:
             self._local_cwd = cmd["local_cwd"]
@@ -349,38 +349,38 @@ class MicroPythonBackend(MainBackend, ABC):
         super()._handle_normal_command(cmd)
 
         self._check_perform_just_in_case_gc()
-        report_time("after " + cmd.name)
+        report_time(f"after {cmd.name}")
 
     def _check_for_connection_error(self) -> None:
         self.get_connection().check_for_error()
 
     def _using_microbit_micropython(self):
-        if not self._welcome_text:
-            return None
-
-        # Don't confuse MicroPython and CircuitPython
-        return "micro:bit" in self._welcome_text.lower() and "MicroPython" in self._welcome_text
+        return (
+            "micro:bit" in self._welcome_text.lower()
+            and "MicroPython" in self._welcome_text
+            if self._welcome_text
+            else None
+        )
 
     def _connected_to_pyboard(self):
-        if not self._welcome_text:
-            return None
-
-        return "pyb" in self._welcome_text.lower() or "pyb" in self._builtin_modules
+        return (
+            "pyb" in self._welcome_text.lower() or "pyb" in self._builtin_modules
+            if self._welcome_text
+            else None
+        )
 
     def _connected_to_circuitpython(self):
-        if not self._welcome_text:
-            return None
-
-        return "circuitpython" in self._welcome_text.lower()
+        return (
+            "circuitpython" in self._welcome_text.lower()
+            if self._welcome_text
+            else None
+        )
 
     def _get_interpreter_kind(self):
         return "CircuitPython" if self._connected_to_circuitpython() else "MicroPython"
 
     def _connected_to_pycom(self):
-        if not self._welcome_text:
-            return None
-
-        return "pycom" in self._welcome_text.lower()
+        return "pycom" in self._welcome_text.lower() if self._welcome_text else None
 
     def _fetch_welcome_text(self) -> str:
         raise NotImplementedError()
@@ -389,10 +389,11 @@ class MicroPythonBackend(MainBackend, ABC):
         raise NotImplementedError()
 
     def _fetch_sys_path(self):
-        if not self._supports_directories():
-            return []
-        else:
-            return self._evaluate("__thonny_helper.sys.path")
+        return (
+            self._evaluate("__thonny_helper.sys.path")
+            if self._supports_directories()
+            else []
+        )
 
     def _fetch_builtins_info(self):
         for stubs_dir in self._get_sys_path_for_analysis():
@@ -440,7 +441,7 @@ class MicroPythonBackend(MainBackend, ABC):
         else:
             result = self._resolve_unknown_epoch()
             if self._args.get("sync_time") or self._args.get("validate_time"):
-                print("WARNING: Could not determine epoch year (%s), assuming %s" % (val, result))
+                print(f"WARNING: Could not determine epoch year ({val}), assuming {result}")
             return result
 
     def _update_cwd(self):
@@ -624,16 +625,14 @@ class MicroPythonBackend(MainBackend, ABC):
         return bool(self._cwd)
 
     def _cmd_cd(self, cmd):
-        if len(cmd.args) == 1:
-            if not self._supports_directories():
-                raise UserError("This device doesn't have directories")
-
-            path = cmd.args[0]
-            self._execute("__thonny_helper.chdir(%r)" % path)
-            self._update_cwd()
-            return {}
-        else:
+        if len(cmd.args) != 1:
             raise UserError("%cd takes one parameter")
+        if not self._supports_directories():
+            raise UserError("This device doesn't have directories")
+
+        self._execute("__thonny_helper.chdir(%r)" % cmd.args[0])
+        self._update_cwd()
+        return {}
 
     def _cmd_Run(self, cmd):
         raise NotImplementedError()
@@ -674,10 +673,9 @@ class MicroPythonBackend(MainBackend, ABC):
                 )
             )
 
-        value_infos = {}
-        for name, pair in globs.items():
-            value_infos[name] = ValueInfo(pair[1], pair[0])
-
+        value_infos = {
+            name: ValueInfo(pair[1], pair[0]) for name, pair in globs.items()
+        }
         logger.debug("Returning %d globals", len(value_infos))
         return {"module_name": cmd.module_name, "globals": value_infos}
 
@@ -699,7 +697,7 @@ class MicroPythonBackend(MainBackend, ABC):
             "attributes": {},
         }
 
-        info.update(self._get_object_info_extras(type_name, repr_str=basic_info["repr"]))
+        info |= self._get_object_info_extras(type_name, repr_str=basic_info["repr"])
         if cmd.include_attributes:
             info["attributes"] = self._get_object_attributes(cmd.all_attributes)
 
@@ -804,7 +802,7 @@ class MicroPythonBackend(MainBackend, ABC):
 
     def _get_object_info_extras(self, type_name: str, repr_str: str):
         """object is given in __thonny_helper.object_info"""
-        if type_name in ("list", "tuple", "set"):
+        if type_name in {"list", "tuple", "set"}:
             items = self._evaluate(
                 "[(__thonny_helper.builtins.id(x), __thonny_helper.repr(x)) for x in __thonny_helper.object_info]"
             )
@@ -893,7 +891,7 @@ class MicroPythonBackend(MainBackend, ABC):
         else:
             requirement_files = None
 
-        assert not any([arg.startswith("-") for arg in args])
+        assert not any(arg.startswith("-") for arg in args)
         specs = args
 
         try:
@@ -929,7 +927,7 @@ class MicroPythonBackend(MainBackend, ABC):
         return [path for path in self._sys_path if "lib" in path and path.startswith("/")]
 
     def _guess_package_pypi_name(self, installed_name) -> str:
-        return "micropython-" + installed_name
+        return f"micropython-{installed_name}"
 
     def _mkdir(self, path: str) -> None:
         # assumes part path exists and path doesn't
@@ -998,11 +996,7 @@ class MicroPythonBackend(MainBackend, ABC):
     def _get_stat(
         self, path: str
     ) -> Optional[Tuple[int, int, int, int, int, int, int, int, int, int]]:
-        if not self._supports_directories():
-            func = "size"
-        else:
-            func = "stat"
-
+        func = "stat" if self._supports_directories() else "size"
         stat = self._evaluate(
             dedent(
                 """
@@ -1064,15 +1058,13 @@ class MicroPythonBackend(MainBackend, ABC):
     def _get_file_size(self, path: str) -> int:
         stat = self._get_stat(path)
         if stat is None:
-            raise OSError("Path '%s' does not exist" % path)
+            raise OSError(f"Path '{path}' does not exist")
 
         return stat[STAT_SIZE_INDEX]
 
     def _get_stat_mode(self, path: str) -> Optional[int]:
         stat = self._get_stat(path)
-        if stat is None:
-            return None
-        return stat[0]
+        return None if stat is None else stat[0]
 
     def _get_path_info(self, path: str) -> Optional[Dict]:
         stat = self._get_stat(path)
@@ -1110,7 +1102,7 @@ class MicroPythonBackend(MainBackend, ABC):
             )
             if raw_data is None:
                 return None
-        elif path == "":
+        elif not path:
             # used to represent all files in micro:bit
             raw_data = self._evaluate(
                 "{name : __thonny_helper.os.size(name) for name in __thonny_helper.os.listdir()}"
@@ -1136,8 +1128,8 @@ class MicroPythonBackend(MainBackend, ABC):
         except SyntaxError:
             return source
 
-        load_nodes = []
         has_store_nodes = False
+        load_nodes = []
         for node in ast.walk(root):
             if (
                 isinstance(node, ast.arg)
@@ -1153,17 +1145,15 @@ class MicroPythonBackend(MainBackend, ABC):
         if not load_nodes:
             return source
 
-        if load_nodes and has_store_nodes:
+        if has_store_nodes:
             print("WARNING: Could not infer REPL _-variables", file=sys.stderr)
             return source
 
         lines = source.splitlines(keepends=True)
         for node in reversed(load_nodes):
-            lines[node.lineno - 1] = (
-                lines[node.lineno - 1][: node.col_offset]
-                + "__thonny_helper.builtins.globals().get('_', __thonny_helper.last_non_none_repl_value)"
-                + lines[node.lineno - 1][node.col_offset + 1 :]
-            )
+            lines[
+                node.lineno - 1
+            ] = f"{lines[node.lineno - 1][:node.col_offset]}__thonny_helper.builtins.globals().get('_', __thonny_helper.last_non_none_repl_value){lines[node.lineno - 1][node.col_offset + 1:]}"
 
         new_source = "".join(lines)
         logger.debug("New source with replaced _-s: %r", new_source)
@@ -1178,11 +1168,11 @@ class MicroPythonBackend(MainBackend, ABC):
             mark_text_ranges(root, source)
             self._mark_nodes_to_be_guarded_from_instrumentation(root, False)
 
-            expr_stmts = []
-            for node in ast.walk(root):
-                if isinstance(node, ast.Expr) and not node.guarded:
-                    expr_stmts.append(node)
-
+            expr_stmts = [
+                node
+                for node in ast.walk(root)
+                if isinstance(node, ast.Expr) and not node.guarded
+            ]
             marker_prefix = "__thonny_helper.print_repl_value("
             marker_suffix = ")"
 
@@ -1220,11 +1210,11 @@ class MicroPythonBackend(MainBackend, ABC):
             mark_text_ranges(root, source)
             self._mark_nodes_to_be_guarded_from_instrumentation(root, False)
 
-            expr_stmts = []
-            for node in ast.walk(root):
-                if isinstance(node, ast.Expr) and not node.guarded:
-                    expr_stmts.append(node)
-
+            expr_stmts = [
+                node
+                for node in ast.walk(root)
+                if isinstance(node, ast.Expr) and not node.guarded
+            ]
             marker_prefix = ""
             marker_suffix = " and None or None"
 
@@ -1273,10 +1263,7 @@ class MicroPythonBackend(MainBackend, ABC):
         if isinstance(node.func, ast.Attribute) and node.func.attr == "asm_pio":
             return True
 
-        if isinstance(node.func, ast.Name) and node.func.id == "asm_pio":
-            return True
-
-        return False
+        return isinstance(node.func, ast.Name) and node.func.id == "asm_pio"
 
     def _system_time_to_posix_time(self, value: float) -> float:
         result = value + self._get_epoch_offset()
@@ -1401,11 +1388,9 @@ def to_remote_path(path):
 def ends_overlap(left, right) -> int:
     """Returns the length of maximum overlap between end of the first and start of the second"""
     max_overlap = min(len(left), len(right))
-    for i in range(max_overlap, 0, -1):
-        if left.endswith(right[:i]):
-            return i
-
-    return 0
+    return next(
+        (i for i in range(max_overlap, 0, -1) if left.endswith(right[:i])), 0
+    )
 
 
 class ReadOnlyFilesystemError(OSError):

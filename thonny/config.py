@@ -25,7 +25,7 @@ def try_load_configuration(filename):
         # when FirstRunWindow already created one
         mgr = ConfigurationManager(filename)
     except configparser.Error as e:
-        new_path = filename + ".corrupt"
+        new_path = f"{filename}.corrupt"
         os.replace(filename, new_path)
         mgr = ConfigurationManager(filename, error_reading_existing_file=e)
 
@@ -64,11 +64,11 @@ class ConfigurationManager:
         for section in defparser.sections():
             for key in defparser[section]:
                 # leave parsing until base default value is known
-                self._defaults_overrides_str[section + "." + key] = defparser[section][key]
+                self._defaults_overrides_str[f"{section}.{key}"] = defparser[section][key]
 
     def get_option(self, name, secondary_default=None):
         section, option = self._parse_name(name)
-        name = section + "." + option
+        name = f"{section}.{option}"
 
         # variable may have more recent value
         if name in self._variables:
@@ -86,17 +86,14 @@ class ConfigurationManager:
             else:
                 return self._parse_value(val)
         except Exception:
-            if name in self._defaults:
-                return self._defaults[name]
-            else:
-                return secondary_default
+            return self._defaults[name] if name in self._defaults else secondary_default
 
     def has_option(self, name):
         return name in self._defaults
 
     def set_option(self, name, value):
         section, option = self._parse_name(name)
-        name = section + "." + option
+        name = f"{section}.{option}"
         if not self._ini.has_section(section):
             self._ini.add_section(section)
 
@@ -112,7 +109,7 @@ class ConfigurationManager:
     def set_default(self, name, primary_default_value):
         # normalize name
         section, option = self._parse_name(name)
-        name = section + "." + option
+        name = f"{section}.{option}"
         self._defaults[name] = primary_default_value
 
         if name in self._defaults_overrides_str:
@@ -127,26 +124,23 @@ class ConfigurationManager:
 
     def get_variable(self, name: str) -> tk.Variable:
         section, option = self._parse_name(name)
-        name = section + "." + option
+        name = f"{section}.{option}"
 
         if name in self._variables:
             return self._variables[name]
+        value = self.get_option(name)
+        if isinstance(value, bool):
+            var = tk.BooleanVar(value=value)  # type: tk.Variable
+        elif isinstance(value, int):
+            var = tk.IntVar(value=value)
+        elif isinstance(value, (str, float)):
+            var = tk.StringVar(value=value)
         else:
-            value = self.get_option(name)
-            if isinstance(value, bool):
-                var = tk.BooleanVar(value=value)  # type: tk.Variable
-            elif isinstance(value, int):
-                var = tk.IntVar(value=value)
-            elif isinstance(value, str):
-                var = tk.StringVar(value=value)
-            elif isinstance(value, float):
-                var = tk.StringVar(value=value)
-            else:
-                raise KeyError(
-                    "Can't create Tk Variable for " + name + ". Type is " + str(type(value))
-                )
-            self._variables[name] = var
-            return var
+            raise KeyError(
+                f"Can't create Tk Variable for {name}. Type is {str(type(value))}"
+            )
+        self._variables[name] = var
+        return var
 
     def save(self):
         # save all tk variables
@@ -161,7 +155,7 @@ class ConfigurationManager:
         # https://bitbucket.org/plas/thonny/issues/167/configuration-file-occasionally-gets
         # Now I'm saving the configuration to a temp file
         # and if the save is successful, I replace configuration file with it
-        temp_filename = self._filename + ".temp"
+        temp_filename = f"{self._filename}.temp"
         with open(temp_filename, "w", encoding="UTF-8") as fp:
             self._ini.write(fp)
 
@@ -175,10 +169,7 @@ class ConfigurationManager:
             exception("Could not save configuration file. Reverting to previous file.")
 
     def _parse_name(self, name):
-        if "." in name:
-            return name.split(".", 1)
-        else:
-            return "general", name
+        return name.split(".", 1) if "." in name else ("general", name)
 
     def _parse_value(self, value):
         try:

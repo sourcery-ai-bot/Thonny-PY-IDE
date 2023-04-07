@@ -8,8 +8,8 @@ else:
 
 for p in comports():
     #if "VID" in p.hwid:
-        for key in ["device", "name", "description", "hwid", "vid", "pid", "serial_number",
+    for key in ["device", "name", "description", "hwid", "vid", "pid", "serial_number",
                     "location", "manufacturer", "product", "interface"]:
-            print(key + ":", getattr(p, key))
-        print("-------------")
+        print(f"{key}:", getattr(p, key))
+    print("-------------")
     

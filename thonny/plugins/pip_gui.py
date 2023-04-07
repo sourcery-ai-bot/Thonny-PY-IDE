@@ -223,7 +223,7 @@ class PipDialog(CommonDialog, ABC):
 
         self.install_button = ttk.Button(
             self.command_frame,
-            text=" " + self.get_upgrade_button_text() + " ",
+            text=f" {self.get_upgrade_button_text()} ",
             command=self._on_install_click,
             width=20,
         )
@@ -265,11 +265,10 @@ class PipDialog(CommonDialog, ABC):
             self.search_button,
         ]
 
-        if state == "idle" and not self._is_read_only():
-            for widget in action_buttons:
+        for widget in action_buttons:
+            if state == "idle" and not self._is_read_only():
                 widget["state"] = tk.NORMAL
-        else:
-            for widget in action_buttons:
+            else:
                 widget["state"] = tk.DISABLED
 
         if state == "idle":
@@ -294,7 +293,7 @@ class PipDialog(CommonDialog, ABC):
     def _update_list(self, name_to_show):
         self.listbox.delete(1, "end")
         for name in sorted(self._active_distributions.keys()):
-            self.listbox.insert("end", " " + name)
+            self.listbox.insert("end", f" {name}")
 
         if name_to_show is None or name_to_show not in self._active_distributions.keys():
             self._show_instructions()
@@ -448,11 +447,9 @@ class PipDialog(CommonDialog, ABC):
     def _get_package_metadata_url(self, name: str, version_str: Optional[str]) -> str:
         # Fetch info from PyPI
         if version_str is None:
-            return "https://pypi.org/pypi/{}/json".format(urllib.parse.quote(name))
+            return f"https://pypi.org/pypi/{urllib.parse.quote(name)}/json"
         else:
-            return "https://pypi.org/pypi/{}/{}/json".format(
-                urllib.parse.quote(name), urllib.parse.quote(version_str)
-            )
+            return f"https://pypi.org/pypi/{urllib.parse.quote(name)}/{urllib.parse.quote(version_str)}/json"
 
     def _get_package_metadata_fallback_url(
         self, name: str, version_str: Optional[str]
@@ -519,14 +516,11 @@ class PipDialog(CommonDialog, ABC):
         self.current_package_data = data
 
         def write(s, tag=None):
-            if tag is None:
-                tags = ()
-            else:
-                tags = (tag,)
+            tags = () if tag is None else (tag, )
             self._append_info_text(s, tags)
 
         def write_att(caption, value, value_tag=None):
-            write(caption + ": ", "caption")
+            write(f"{caption}: ", "caption")
             write(value, value_tag)
             write("\n")
 
@@ -723,7 +717,28 @@ class PipDialog(CommonDialog, ABC):
         if self._use_user_install():
             install_args.append("--user")
 
-        if action == "install":
+        if action == "advanced":
+            command = "install"
+            title = tr("Installing")
+            details = _ask_installation_details(
+                self,
+                data,
+                _get_latest_stable_version(list(data["releases"].keys())),
+                self.does_support_update_deps_switch(),
+            )
+            if details is None:  # Cancel
+                return False
+
+            version, package_data, upgrade_deps = details
+            if not self._confirm_install(package_data):
+                return False
+
+            args = install_args
+            if upgrade_deps:
+                args.append("--upgrade")
+
+            args.append(f"{name}=={version}")
+        elif action == "install":
             command = "install"
             title = tr("Installing '%s'") % name
             if not self._confirm_install(self.current_package_data):
@@ -750,27 +765,6 @@ class PipDialog(CommonDialog, ABC):
             ):
                 return False
             args = ["--yes", name]
-        elif action == "advanced":
-            command = "install"
-            title = tr("Installing")
-            details = _ask_installation_details(
-                self,
-                data,
-                _get_latest_stable_version(list(data["releases"].keys())),
-                self.does_support_update_deps_switch(),
-            )
-            if details is None:  # Cancel
-                return False
-
-            version, package_data, upgrade_deps = details
-            if not self._confirm_install(package_data):
-                return False
-
-            args = install_args
-            if upgrade_deps:
-                args.append("--upgrade")
-
-            args.append(name + "==" + version)
         else:
             raise RuntimeError("Unknown action")
 
@@ -784,26 +778,27 @@ class PipDialog(CommonDialog, ABC):
         if self._get_state() != "idle":
             return
 
-        filename = askopenfilename(
+        if filename := askopenfilename(
             master=self,
-            filetypes=[(tr("Package"), ".whl .zip .tar.gz"), (tr("all files"), ".*")],
+            filetypes=[
+                (tr("Package"), ".whl .zip .tar.gz"),
+                (tr("all files"), ".*"),
+            ],
             initialdir=get_workbench().get_local_cwd(),
             parent=self.winfo_toplevel(),
-        )
-        if filename:  # Note that missing filename may be "" or () depending on tkinter version
+        ):
             self._install_file(filename, False)
 
     def _handle_install_requirements_click(self, event):
         if self._get_state() != "idle":
             return
 
-        filename = askopenfilename(
+        if filename := askopenfilename(
             master=self,
             filetypes=[("requirements", ".txt"), (tr("all files"), ".*")],
             initialdir=get_workbench().get_local_cwd(),
             parent=self.winfo_toplevel(),
-        )
-        if filename:  # Note that missing filename may be "" or () depending on tkinter version
+        ):
             self._install_file(filename, True)
 
     def _handle_target_directory_click(self, event):
@@ -861,18 +856,18 @@ class PipDialog(CommonDialog, ABC):
 
     def _get_active_version(self, name):
         dist = self._get_active_dist(name)
-        if dist is None:
-            return None
-        else:
-            return dist.version
+        return None if dist is None else dist.version
 
     def _get_active_dist(self, name):
         normname = self._normalize_name(name)
-        for key in self._active_distributions:
-            if self._normalize_name(key) == normname:
-                return self._active_distributions[key]
-
-        return None
+        return next(
+            (
+                self._active_distributions[key]
+                for key in self._active_distributions
+                if self._normalize_name(key) == normname
+            ),
+            None,
+        )
 
     def _run_pip_with_dialog(
         self, command: str, args: List[str], title: str
@@ -1077,8 +1072,7 @@ class PluginsPipDialog(PipDialog):
             )
             return False
         elif reqs:
-            conflicts = self._conflicts_with_thonny_version(reqs)
-            if conflicts:
+            if conflicts := self._conflicts_with_thonny_version(reqs):
                 showerror(
                     tr("Unsuitable requirements"),
                     tr("This package requires different Thonny version:")
@@ -1095,17 +1089,19 @@ class PluginsPipDialog(PipDialog):
         return True
 
     def _get_target_directory(self):
-        if self._use_user_install():
-            target = thonny.get_sys_path_directory_containg_plugins()
-            os.makedirs(target, exist_ok=True)
-            return self._normalize_target_path(target)
-        else:
-            for d in sys.path:
-                if ("site-packages" in d or "dist-packages" in d) and path_startswith(
-                    d, sys.prefix
-                ):
-                    return self._normalize_target_path(d)
-            return None
+        if not self._use_user_install():
+            return next(
+                (
+                    self._normalize_target_path(d)
+                    for d in sys.path
+                    if ("site-packages" in d or "dist-packages" in d)
+                    and path_startswith(d, sys.prefix)
+                ),
+                None,
+            )
+        target = thonny.get_sys_path_directory_containg_plugins()
+        os.makedirs(target, exist_ok=True)
+        return self._normalize_target_path(target)
 
     def _normalize_target_path(self, path: str) -> str:
         return normpath_with_actual_case(path)
@@ -1150,7 +1146,11 @@ class PluginsPipDialog(PipDialog):
             environment_extras={"PYTHONUSERBASE": thonny.get_user_base_directory_for_plugins()},
         )
         dlg = SubprocessDialog(
-            self, proc, title="pip " + command, long_description=title, autostart=True
+            self,
+            proc,
+            title=f"pip {command}",
+            long_description=title,
+            autostart=True,
         )
         ui_utils.show_dialog(dlg)
         return dlg.returncode, dlg.stdout, dlg.stderr
@@ -1190,7 +1190,7 @@ class DetailsDialog(CommonDialog):
         def version_sort_key(s):
             # Trying to massage understandable versions into valid StrictVersions
             if s.replace(".", "").isnumeric():  # stable release
-                s2 = s + "b999"  # make it latest beta version
+                s2 = f"{s}b999"
             elif "rc" in s:
                 s2 = s.replace("rc", "b8")
             else:
@@ -1319,8 +1319,11 @@ class DetailsDialog(CommonDialog):
             and "requires_dist" in info["info"]
             and isinstance(info["info"]["requires_dist"], list)
         ):
-            deps = [d for d in info["info"]["requires_dist"] if not _EXTRA_MARKER_RE.match(d)]
-            if deps:
+            if deps := [
+                d
+                for d in info["info"]["requires_dist"]
+                if not _EXTRA_MARKER_RE.match(d)
+            ]:
                 reqs = tr("Requires:") + "\n  * " + "\n  * ".join(deps)
         elif error_code:
             reqs = tr("Error code:") + " " + str(error_code)
@@ -1366,17 +1369,12 @@ def _fetch_url_future(url, fallback_url=None, timeout=10):
 def _get_latest_stable_version(version_strings):
     from distutils.version import LooseVersion
 
-    versions = []
-    for s in version_strings:
-        if s.replace(".", "").isnumeric():  # Assuming stable versions have only dots and numbers
-            versions.append(
-                LooseVersion(s)
-            )  # LooseVersion __str__ doesn't change the version string
-
-    if len(versions) == 0:
-        return None
-
-    return str(sorted(versions)[-1])
+    versions = [
+        LooseVersion(s)
+        for s in version_strings
+        if s.replace(".", "").isnumeric()
+    ]
+    return str(sorted(versions)[-1]) if versions else None
 
 
 def _ask_installation_details(master, data, selected_version, support_update_deps_switch):
@@ -1485,9 +1483,9 @@ def _extract_search_results(html_data: str) -> List:
 def _extract_click_text(widget, event, tag):
     # http://stackoverflow.com/a/33957256/261181
     try:
-        index = widget.index("@%s,%s" % (event.x, event.y))
+        index = widget.index(f"@{event.x},{event.y}")
         tag_indices = list(widget.tag_ranges(tag))
-        for start, end in zip(tag_indices[0::2], tag_indices[1::2]):
+        for start, end in zip(tag_indices[::2], tag_indices[1::2]):
             # check if the tag matches the mouse click index
             if widget.compare(start, "<=", index) and widget.compare(index, "<", end):
                 return widget.get(start, end)

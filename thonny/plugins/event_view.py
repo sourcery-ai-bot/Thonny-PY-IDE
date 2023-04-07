@@ -23,7 +23,7 @@ class EventsView(TextFrame):
         for name in dir(event):
             if name not in ["sequence", "setdefault", "update"] and not name.startswith("_"):
                 self.text.insert(
-                    "end", "    " + name + ": " + repr(getattr(event, name))[:100] + "\n"
+                    "end", f"    {name}: {repr(getattr(event, name))[:100]}" + "\n"
                 )
 
         if isinstance(event, DebuggerResponse):

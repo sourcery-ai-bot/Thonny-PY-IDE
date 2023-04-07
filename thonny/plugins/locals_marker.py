@@ -65,13 +65,14 @@ class LocalsHighlighter:
             if isinstance(child, tree.BaseNode) and parser_utils.is_scope(child):
                 process_scope(child)
 
-        loc_pos = set(
+        loc_pos = {
             (
                 "%d.%d" % (usage.start_pos[0], usage.start_pos[1]),
-                "%d.%d" % (usage.start_pos[0], usage.start_pos[1] + len(usage.value)),
+                "%d.%d"
+                % (usage.start_pos[0], usage.start_pos[1] + len(usage.value)),
             )
             for usage in locs
-        )
+        }
 
         return loc_pos
 

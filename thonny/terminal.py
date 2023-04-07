@@ -20,7 +20,7 @@ def run_in_terminal(cmd, cwd, env_overrides={}, keep_open=True, title=None):
     elif sys.platform == "darwin":
         _run_in_terminal_in_macos(cmd, cwd, env_overrides, keep_open)
     else:
-        raise RuntimeError("Can't launch terminal in " + platform.system())
+        raise RuntimeError(f"Can't launch terminal in {platform.system()}")
 
 
 def open_system_shell(cwd, env_overrides={}):
@@ -30,14 +30,13 @@ def open_system_shell(cwd, env_overrides={}):
 
     if sys.platform == "darwin":
         _run_in_terminal_in_macos([], cwd, env_overrides, True)
-    elif sys.platform == "win32":
-        cmd = "start cmd"
-        subprocess.Popen(cmd, cwd=cwd, env=env, shell=True)
     elif sys.platform == "linux":
         cmd = _get_linux_terminal_command()
         subprocess.Popen(cmd, cwd=cwd, env=env, shell=True)
+    elif sys.platform == "win32":
+        subprocess.Popen("start cmd", cwd=cwd, env=env, shell=True)
     else:
-        raise RuntimeError("Can't launch terminal in " + platform.system())
+        raise RuntimeError(f"Can't launch terminal in {platform.system()}")
 
 
 def _add_to_path(directory, path):
@@ -57,9 +56,13 @@ def _add_to_path(directory, path):
 def _run_in_terminal_in_windows(cmd, cwd, env, keep_open, title=None):
     if keep_open:
         # Yes, the /K argument has weird quoting. Can't explain this, but it works
-        quoted_args = " ".join(map(lambda s: s if s == "&" else '"' + s + '"', cmd))
-        cmd_line = """start {title} /D "{cwd}" /W cmd /K "{quoted_args}" """.format(
-            cwd=cwd, quoted_args=quoted_args, title='"' + title + '"' if title else ""
+        quoted_args = " ".join(map(lambda s: s if s == "&" else f'"{s}"', cmd))
+        cmd_line = (
+            """start {title} /D "{cwd}" /W cmd /K "{quoted_args}" """.format(
+                cwd=cwd,
+                quoted_args=quoted_args,
+                title=f'"{title}"' if title else "",
+            )
         )
 
         subprocess.Popen(cmd_line, cwd=cwd, env=env, shell=True)
@@ -104,13 +107,13 @@ def _run_in_terminal_in_linux(cmd, cwd, env, keep_open):
 def _run_in_terminal_in_macos(cmd, cwd, env_overrides, keep_open):
     _shellquote = shlex.quote
 
-    cmds = "clear; cd " + _shellquote(cwd)
+    cmds = f"clear; cd {_shellquote(cwd)}"
     # osascript "tell application" won't change Terminal's env
     # (at least when Terminal is already active)
     # At the moment I just explicitly set some important variables
     for key in env_overrides:
         if env_overrides[key] is None:
-            cmds += "; unset " + key
+            cmds += f"; unset {key}"
         else:
             value = env_overrides[key]
             if key == "PATH":
@@ -121,7 +124,7 @@ def _run_in_terminal_in_macos(cmd, cwd, env_overrides, keep_open):
     if cmd:
         if isinstance(cmd, list):
             cmd = " ".join(map(_shellquote, cmd))
-        cmds += "; " + cmd
+        cmds += f"; {cmd}"
 
     if not keep_open:
         cmds += "; exit"
@@ -129,8 +132,8 @@ def _run_in_terminal_in_macos(cmd, cwd, env_overrides, keep_open):
     # try to shorten to avoid too long line https://github.com/thonny/thonny/issues/1529
 
     common_prefix = os.path.normpath(sys.prefix).rstrip("/")
-    cmds = (
-        " export THOPR=" + common_prefix + " ; " + cmds.replace(common_prefix + "/", "$THOPR" + "/")
+    cmds = f" export THOPR={common_prefix} ; " + cmds.replace(
+        f"{common_prefix}/", "$THOPR" + "/"
     )
     print(cmds)
 
@@ -145,8 +148,8 @@ def _run_in_terminal_in_macos(cmd, cwd, env_overrides, keep_open):
     # do script ... in window 1 would solve this, but if Terminal is already
     # open, this could run the script in existing terminal (in undesirable env on situation)
     # That's why I need to prepare two variations of the 'do script' command
-    doScriptCmd1 = """        do script %s """ % cmd_as_apple_script_string_literal
-    doScriptCmd2 = """        do script %s in window 1 """ % cmd_as_apple_script_string_literal
+    doScriptCmd1 = f"""        do script {cmd_as_apple_script_string_literal} """
+    doScriptCmd2 = f"""        do script {cmd_as_apple_script_string_literal} in window 1 """
 
     # The whole AppleScript will be executed with osascript by giving script
     # lines as arguments. The lines containing our script need to be shell-quoted:
@@ -177,8 +180,7 @@ def _run_in_terminal_in_macos(cmd, cwd, env_overrides, keep_open):
 def _get_linux_terminal_command():
     import shutil
 
-    xte = shutil.which("x-terminal-emulator")
-    if xte:
+    if xte := shutil.which("x-terminal-emulator"):
         if os.path.realpath(xte).endswith("/lxterminal") and shutil.which("lxterminal"):
             # need to know exact program, because it needs special treatment
             return "lxterminal"
@@ -187,7 +189,6 @@ def _get_linux_terminal_command():
             return "terminator"
         else:
             return "x-terminal-emulator"
-    # Older konsole didn't pass on the environment
     elif shutil.which("konsole"):
         if (
             shutil.which("gnome-terminal")

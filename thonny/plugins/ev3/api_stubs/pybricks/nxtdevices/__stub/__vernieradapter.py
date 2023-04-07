@@ -12,7 +12,7 @@ class VernierAdapter:
     """
 
     def __init__(self, port: Port, conversion: Callable = None):
-        if port == Port.A or port == Port.B or port == Port.C or port == Port.D:
+        if port in [Port.A, Port.B, Port.C, Port.D]:
             raise ValueError("Sensors must use Port S1, S2, S3, or S4.")
 
     def voltage(self) -> int:

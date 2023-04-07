@@ -22,12 +22,7 @@ def create_bitmap_file(width, height, predicate, name):
 
     hex_lines = []
 
-    if width % 8 == 0:
-        row_size = width
-    else:
-        # need to pad row size so that it is multiple of 8
-        row_size = width + 8 - (width % 8)
-
+    row_size = width if width % 8 == 0 else width + 8 - (width % 8)
     for y in range(height):
         byte_hexes = []
         for byte_index in range(row_size // 8):
@@ -116,9 +111,9 @@ def configure_text(text):
                 ):
                     return base_predicate(x, y, top, bottom)
 
-                tag_name = "%s_%s_%s" % (orient, top, bottom)
+                tag_name = f"{orient}_{top}_{bottom}"
                 bitmap_path = create_bitmap_file(indent_width, line_height, predicate, tag_name)
-                text.tag_configure(tag_name, background=color, bgstipple="@" + bitmap_path)
+                text.tag_configure(tag_name, background=color, bgstipple=f"@{bitmap_path}")
 
     return True
 
@@ -140,7 +135,7 @@ def clear_tags(text):
     for pos in ["ver", "hor"]:
         for top in [True, False]:
             for bottom in [True, False]:
-                text.tag_remove("%s_%s_%s" % (pos, top, bottom), "1.0", "end")
+                text.tag_remove(f"{pos}_{top}_{bottom}", "1.0", "end")
 
 
 def add_tags(text):
@@ -184,13 +179,13 @@ def add_tags(text):
                 # horizontal line (only for first or last line)
                 if top or bottom:
                     text.tag_add(
-                        "hor_%s_%s" % (top, bottom),
+                        f"hor_{top}_{bottom}",
                         "%d.%d" % (lineno, start_col),
                         "%d.%d" % (lineno + 1 if end_col == 0 else lineno, 0),
                     )
 
                     print(
-                        "hor_%s_%s" % (top, bottom),
+                        f"hor_{top}_{bottom}",
                         "%d.%d" % (lineno, start_col),
                         "%d.%d" % (lineno + 1, 0),
                     )
@@ -200,12 +195,12 @@ def add_tags(text):
                 # (statement's indent shouldn't decrease in continuation lines)
                 if start_col > 0:
                     text.tag_add(
-                        "ver_%s_%s" % (top, bottom),
+                        f"ver_{top}_{bottom}",
                         "%d.%d" % (lineno, start_col - 1),
                         "%d.%d" % (lineno, start_col),
                     )
                     print(
-                        "ver_%s_%s" % (top, bottom),
+                        f"ver_{top}_{bottom}",
                         "%d.%d" % (lineno, start_col - 1),
                         "%d.%d" % (lineno, start_col),
                     )
@@ -226,11 +221,7 @@ def handle_editor_event(event):
 
 
 def handle_events(event):
-    if hasattr(event, "text_widget"):
-        text = event.text_widget
-    else:
-        text = event.widget
-
+    text = event.text_widget if hasattr(event, "text_widget") else event.widget
     configure_and_add_tags(text)
 
 

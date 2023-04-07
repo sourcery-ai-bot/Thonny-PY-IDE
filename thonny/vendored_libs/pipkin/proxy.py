@@ -151,7 +151,7 @@ class JsonIndexDownloader(BaseIndexDownloader):
                             if not file_name.startswith(dist_name):
                                 # Let's hope version part doesn't contain dashes
                                 _, suffix = file_name.split("-")
-                                file_name = dist_name + "-" + suffix
+                                file_name = f"{dist_name}-{suffix}"
                         result[file_name] = file_url
         except HTTPError as e:
             if e.code == 404:
@@ -163,10 +163,11 @@ class JsonIndexDownloader(BaseIndexDownloader):
 
 class MpOrgIndexDownloader(JsonIndexDownloader):
     def _download_file_urls(self, dist_name) -> Optional[Dict[str, str]]:
-        if not normalize_dist_name(dist_name).startswith("micropython_"):
-            return None
-
-        return super()._download_file_urls(dist_name)
+        return (
+            super()._download_file_urls(dist_name)
+            if normalize_dist_name(dist_name).startswith("micropython_")
+            else None
+        )
 
 
 class PipkinProxy(HTTPServer):
@@ -178,8 +179,9 @@ class PipkinProxy(HTTPServer):
         if not no_mp_org:
             self._downloaders.append(MpOrgIndexDownloader(MP_ORG_INDEX))
         self._downloaders.append(SimpleIndexDownloader(index_url or PYPI_SIMPLE_INDEX))
-        for url in extra_index_urls:
-            self._downloaders.append(SimpleIndexDownloader(url))
+        self._downloaders.extend(
+            SimpleIndexDownloader(url) for url in extra_index_urls
+        )
         super().__init__(("127.0.0.1", port), PipkinProxyHandler)
 
     def get_downloader_for_dist(self, dist_name: str) -> Optional[BaseIndexDownloader]:
@@ -332,17 +334,12 @@ class PipkinProxyHandler(BaseHTTPRequestHandler):
                     # toplevel module
                     module_name = rel_name[: -len(".py")]
                     py_modules.append(module_name)
-                else:
-                    if info.isdir():
-                        # Assuming all toplevel directories represent packages.
-                        packages.append(rel_name)
-            else:
-                # Assuming an item inside a subdirectory.
-                # If it's a py, it will be included together with containing package,
-                # otherwise it will be picked up by package_data wildcard expression.
-                if rel_segments[0] not in packages:
-                    # directories may not have their own entry
-                    packages.append(rel_segments[0])
+                elif info.isdir():
+                    # Assuming all toplevel directories represent packages.
+                    packages.append(rel_name)
+            elif rel_segments[0] not in packages:
+                # directories may not have their own entry
+                packages.append(rel_segments[0])
 
             # all existing files and dirs need to be added without changing
             out_tar.addfile(out_info, io.BytesIO(content))
@@ -359,10 +356,12 @@ class PipkinProxyHandler(BaseHTTPRequestHandler):
         setup_py = self._create_setup_py(metadata, py_modules, packages, requirements)
         logger.debug("setup.py: %s", setup_py)
 
-        self._add_file_to_tar(wrapper_dir + "/setup.py", setup_py.encode("utf-8"), out_tar)
-        self._add_file_to_tar(wrapper_dir + "/PKG-INFO", metadata_bytes, out_tar)
         self._add_file_to_tar(
-            wrapper_dir + "/setup.cfg",
+            f"{wrapper_dir}/setup.py", setup_py.encode("utf-8"), out_tar
+        )
+        self._add_file_to_tar(f"{wrapper_dir}/PKG-INFO", metadata_bytes, out_tar)
+        self._add_file_to_tar(
+            f"{wrapper_dir}/setup.cfg",
             b"""[egg_info]
 tag_build = 
 tag_date = 0
@@ -370,10 +369,10 @@ tag_date = 0
             out_tar,
         )
         self._add_file_to_tar(
-            wrapper_dir + "/" + egg_info_path + "/dependency_links.txt", b"\n", out_tar
+            f"{wrapper_dir}/{egg_info_path}/dependency_links.txt", b"\n", out_tar
         )
         self._add_file_to_tar(
-            wrapper_dir + "/" + egg_info_path + "/top_level.txt",
+            f"{wrapper_dir}/{egg_info_path}/top_level.txt",
             ("\n".join(packages + py_modules) + "\n").encode("utf-8"),
             out_tar,
         )
@@ -382,12 +381,7 @@ tag_date = 0
 
         out_tar.close()
 
-        out_bytes = out_buffer.getvalue()
-
-        # with open("_temp.tar.gz", "wb") as fp:
-        #    fp.write(out_bytes)
-
-        return out_bytes
+        return out_buffer.getvalue()
 
     def _add_file_to_tar(self, name: str, content: bytes, tar: tarfile.TarFile) -> None:
         stream = io.BytesIO(content)
@@ -504,7 +498,7 @@ def create_dummy_dist(dist_name: str, file_name: str) -> bytes:
         elif suffix == ".tar.gz":
             setup_py_args = ["sdist", "--formats=gztar"]
         else:
-            raise AssertionError("Unexpected suffix " + suffix)
+            raise AssertionError(f"Unexpected suffix {suffix}")
 
         args = [sys.executable, setup_py_path] + setup_py_args
         subprocess.check_call(args, executable=args[0], cwd=tmp, stdin=subprocess.DEVNULL)

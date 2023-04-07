@@ -71,20 +71,19 @@ class ObjectInspector(ttk.Frame):
             def on_click(event):
                 if self.active_page == page:
                     return
-                else:
-                    if self.active_page is not None:
-                        self.active_page.grid_forget()
-                        self.active_page.tab.configure(style="Inactive.ViewTab.TLabel")
+                if self.active_page is not None:
+                    self.active_page.grid_forget()
+                    self.active_page.tab.configure(style="Inactive.ViewTab.TLabel")
 
-                    self.active_page = page
-                    page.grid(row=1, column=0, sticky="nsew", padx=0)
-                    tab.configure(style="Active.ViewTab.TLabel")
-                    if (
-                        self.active_page == self.attributes_page
-                        and (self.object_info is None or not self.object_info.get("attributes"))
-                        and self.object_id is not None
-                    ):
-                        self.request_object_info()
+                self.active_page = page
+                page.grid(row=1, column=0, sticky="nsew", padx=0)
+                tab.configure(style="Active.ViewTab.TLabel")
+                if (
+                    self.active_page == self.attributes_page
+                    and (self.object_info is None or not self.object_info.get("attributes"))
+                    and self.object_id is not None
+                ):
+                    self.request_object_info()
 
             tab.bind("<1>", on_click)
 
@@ -129,9 +128,10 @@ class ObjectInspector(ttk.Frame):
         self.current_content_inspector = None
         self.content_inspectors = []
         # load custom inspectors
-        for insp_class in get_workbench().content_inspector_classes:
-            self.content_inspectors.append(insp_class(self.content_page))
-
+        self.content_inspectors.extend(
+            insp_class(self.content_page)
+            for insp_class in get_workbench().content_inspector_classes
+        )
         # read standard inspectors
         self.content_inspectors.extend(
             [
@@ -184,7 +184,7 @@ class ObjectInspector(ttk.Frame):
             context_id = self.object_id
             self.object_id = object_id
             self.set_object_info(None)
-            self._set_title("object @ " + thonny.memory.format_object_id(object_id))
+            self._set_title(f"object @ {thonny.memory.format_object_id(object_id)}")
             self.request_object_info(context_id=context_id)
 
     def _on_backend_restart(self, event=None):
@@ -280,12 +280,14 @@ class ObjectInspector(ttk.Frame):
         """
 
     def update_type_specific_info(self, object_info):
-        content_inspector = None
-        for insp in self.content_inspectors:
-            if insp.applies_to(object_info):
-                content_inspector = insp
-                break
-
+        content_inspector = next(
+            (
+                insp
+                for insp in self.content_inspectors
+                if insp.applies_to(object_info)
+            ),
+            None,
+        )
         if content_inspector != self.current_content_inspector:
             if self.current_content_inspector is not None:
                 self.current_content_inspector.grid_remove()  # TODO: or forget?
@@ -343,13 +345,13 @@ class FileHandleInspector(TextFrame, ContentInspector):
         # f.tell() gives num of bytes read (minus some magic with linebreaks)
 
         file_bytes = content.encode(encoding=object_info["file_encoding"])
-        bytes_read = file_bytes[0 : object_info["file_tell"]]
+        bytes_read = file_bytes[:object_info["file_tell"]]
         read_content = bytes_read.decode(encoding=object_info["file_encoding"])
         read_char_count = len(read_content)
         # read_line_count_term = (len(content.splitlines())
         #                        - len(content[read_char_count:].splitlines()))
 
-        pos_index = "1.0+" + str(read_char_count) + "c"
+        pos_index = f"1.0+{read_char_count}c"
         self.text.tag_add("read", "1.0", pos_index)
         self.text.see(pos_index)
 
@@ -400,7 +402,7 @@ class StringInspector(TextFrame, ContentInspector):
         except SyntaxError:
             try:
                 # can be shortened
-                content = ast.literal_eval(object_info["repr"] + object_info["repr"][0:1])
+                content = ast.literal_eval(object_info["repr"] + object_info["repr"][:1])
             except SyntaxError:
                 content = "<can't show string content>"
 
@@ -557,11 +559,10 @@ class ElementsInspector(thonny.memory.MemoryFrame, ContentInspector):
                 self.tree.configure(displaycolumns=("index", "id"))
             else:
                 self.tree.configure(displaycolumns=("id",))
+        elif self.elements_have_indices:
+            self.tree.configure(displaycolumns=("index", "value"))
         else:
-            if self.elements_have_indices:
-                self.tree.configure(displaycolumns=("index", "value"))
-            else:
-                self.tree.configure(displaycolumns=("value"))
+            self.tree.configure(displaycolumns=("value"))
 
     def applies_to(self, object_info):
         return "elements" in object_info
@@ -580,9 +581,8 @@ class ElementsInspector(thonny.memory.MemoryFrame, ContentInspector):
         self.context_id = object_info["id"]
 
         self._clear_tree()
-        index = 0
         # TODO: don't show too big number of elements
-        for element in object_info["elements"]:
+        for index, element in enumerate(object_info["elements"]):
             node_id = self.tree.insert("", "end")
             if self.elements_have_indices:
                 self.tree.set(node_id, "index", index)
@@ -593,8 +593,6 @@ class ElementsInspector(thonny.memory.MemoryFrame, ContentInspector):
             self.tree.set(
                 node_id, "value", shorten_repr(element.repr, thonny.memory.MAX_REPR_LENGTH_IN_GRID)
             )
-            index += 1
-
         count = len(object_info["elements"])
         self.len_label.configure(text=" len: %d" % count)
 
@@ -679,7 +677,8 @@ class ImageInspector(ContentInspector, tk.Frame):
             data = object_info["image_data"]
         else:
             self.label.configure(
-                image=None, text="Unsupported image data (%s)" % type(object_info["image_data"])
+                image=None,
+                text=f'Unsupported image data ({type(object_info["image_data"])})',
             )
             return
 
@@ -687,7 +686,7 @@ class ImageInspector(ContentInspector, tk.Frame):
             self.image = tk.PhotoImage(data=data)
             self.label.configure(image=self.image)
         except Exception as e:
-            self.label.configure(image=None, text="Unsupported image data (%s)" % e)
+            self.label.configure(image=None, text=f"Unsupported image data ({e})")
 
     def applies_to(self, object_info):
         return "image_data" in object_info

@@ -61,9 +61,7 @@ class ReplayerFileBrowser(BaseLocalFileBrowser):
             self.focus_into(os.path.expanduser("~"))
 
     def on_double_click(self, event):
-        # self.save_current_folder()
-        path = self.get_selected_path()
-        if path:
+        if path := self.get_selected_path():
             kind = self.get_selected_kind()
             if kind == "dir":
                 self.focus_into(path)
@@ -128,7 +126,7 @@ class LogFrame(ui_utils.TreeFrame):
                     pause = delta.seconds
                 else:
                     pause = 0
-                self.tree.set(node_id, "pause", str(pause if pause else ""))
+                self.tree.set(node_id, "pause", str(pause or ""))
                 self.all_events.append(event)
 
                 last_event_time = event_time
@@ -238,17 +236,18 @@ class ReplayerEditor(ttk.Frame):
         self.rowconfigure(0, weight=1)
 
     def replay_event(self, event):
-        if event["sequence"] in ["TextInsert", "TextDelete"]:
-            if event["sequence"] == "TextInsert":
-                self.code_view.text.insert(
-                    event["index"], event["text"], ast.literal_eval(event["tags"])
-                )
+        if event["sequence"] == "TextInsert":
+            self.code_view.text.insert(
+                event["index"], event["text"], ast.literal_eval(event["tags"])
+            )
 
-            elif event["sequence"] == "TextDelete":
-                if event["index2"] and event["index2"] != "None":
-                    self.code_view.text.delete(event["index1"], event["index2"])
-                else:
-                    self.code_view.text.delete(event["index1"])
+            self.see_event(event)
+
+        elif event["sequence"] == "TextDelete":
+            if event["index2"] and event["index2"] != "None":
+                self.code_view.text.delete(event["index1"], event["index2"])
+            else:
+                self.code_view.text.delete(event["index1"])
 
             self.see_event(event)
 

@@ -10,9 +10,8 @@ def raise_on_exist_ro_file(filename: str) -> None:
     except OSError:
         return None  # swallow does not exist or other errors
 
-    if file_stat.st_mtime != 0:  # if os.stat returns but modification is zero that's an invalid os.stat - ignore it
-        if not (file_stat.st_mode & stat.S_IWUSR):
-            raise PermissionError(f"Permission denied: {filename!r}")
+    if file_stat.st_mtime != 0 and not (file_stat.st_mode & stat.S_IWUSR):
+        raise PermissionError(f"Permission denied: {filename!r}")
 
 
 __all__ = [

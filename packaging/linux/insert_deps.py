@@ -8,8 +8,7 @@ target_path = sys.argv[2]
 replacement = ""
 with open(source_path) as fp:
     for line in fp:
-        dep = line.split("#")[0].strip()
-        if dep:
+        if dep := line.split("#")[0].strip():
             replacement += f"'{dep}' "
 
 with open(target_path, encoding="utf-8") as fp:

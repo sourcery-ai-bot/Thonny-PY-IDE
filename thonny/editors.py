@@ -111,10 +111,7 @@ class Editor(ttk.Frame):
         return self._filename
 
     def get_identifier(self):
-        if self._filename:
-            return self._filename
-        else:
-            return str(self.winfo_id())
+        return self._filename or str(self.winfo_id())
 
     def get_title(self):
         if self.get_filename() is None:
@@ -122,7 +119,7 @@ class Editor(ttk.Frame):
         elif is_remote_path(self.get_filename()):
             path = extract_target_path(self.get_filename())
             name = path.split("/")[-1]
-            result = "[ " + name + " ]"
+            result = f"[ {name} ]"
         else:
             result = os.path.basename(self.get_filename())
 
@@ -183,16 +180,12 @@ class Editor(ttk.Frame):
             self._last_known_mtime = os.path.getmtime(self._filename)
 
     def get_long_description(self):
-        if self._filename is None:
-            result = tr("<untitled>")
-        else:
-            result = self._filename
-
+        result = tr("<untitled>") if self._filename is None else self._filename
         try:
             index = self._code_view.text.index("insert")
             if index and "." in index:
                 line, col = index.split(".")
-                result += "  @  {} : {}".format(line, int(col) + 1)
+                result += f"  @  {line} : {int(col) + 1}"
         except Exception:
             exception("Finding cursor location")
 
@@ -208,7 +201,7 @@ class Editor(ttk.Frame):
                     return False
         except BinaryFileException:
             messagebox.showerror(
-                "Problem", "%s doesn't look like a text file" % filename, master=self
+                "Problem", f"{filename} doesn't look like a text file", master=self
             )
             return False
         except SyntaxError as e:
@@ -325,12 +318,11 @@ class Editor(ttk.Frame):
             content_bytes = content_bytes.replace(b"\r\n", b"\n")
 
         try:
-            f = open(save_filename, mode="wb")
-            f.write(content_bytes)
-            f.flush()
-            # Force writes on disk, see https://learn.adafruit.com/adafruit-circuit-playground-express/creating-and-editing-code#1-use-an-editor-that-writes-out-the-file-completely-when-you-save-it
-            os.fsync(f)
-            f.close()
+            with open(save_filename, mode="wb") as f:
+                f.write(content_bytes)
+                f.flush()
+                # Force writes on disk, see https://learn.adafruit.com/adafruit-circuit-playground-express/creating-and-editing-code#1-use-an-editor-that-writes-out-the-file-completely-when-you-save-it
+                os.fsync(f)
             if process_shebang:
                 os.chmod(save_filename, 0o755)
             if not save_copy or save_filename == self._filename:
@@ -414,13 +406,11 @@ class Editor(ttk.Frame):
 
         if node == "local":
             return self.ask_new_local_path()
-        else:
-            assert node == "remote"
-            return self.ask_new_remote_path()
+        assert node == "remote"
+        return self.ask_new_remote_path()
 
     def ask_new_remote_path(self):
-        target_path = ask_backend_path(self.winfo_toplevel(), "save")
-        if target_path:
+        if target_path := ask_backend_path(self.winfo_toplevel(), "save"):
             target_path = self._check_add_py_extension(target_path)
             return make_remote_path(target_path)
         else:
@@ -457,7 +447,7 @@ class Editor(ttk.Frame):
                 os.path.basename(new_filename),
             )
 
-        if type_var.get() == PYTHON_FILES_STR or type_var.get() == "":
+        if type_var.get() in [PYTHON_FILES_STR, ""]:
             new_filename = self._check_add_py_extension(
                 new_filename, without_asking=type_var.get() == PYTHON_FILES_STR
             )
@@ -476,17 +466,15 @@ class Editor(ttk.Frame):
                 "pygame",
                 "matplotlib",
                 "numpy",
-            ]:
-                # More proper name analysis will be performed by ProgramNamingAnalyzer
-                if not tk.messagebox.askyesno(
-                    "Potential problem",
-                    "If you name your script '%s', " % base
-                    + "you won't be able to import the library module named '%s'" % mod_name
-                    + ".\n\n"
-                    + "Do you still want to use this name for your script?",
-                    master=self,
-                ):
-                    return self.ask_new_local_path()
+            ] and not tk.messagebox.askyesno(
+                "Potential problem",
+                f"If you name your script '{base}', "
+                + f"you won't be able to import the library module named '{mod_name}'"
+                + ".\n\n"
+                + "Do you still want to use this name for your script?",
+                master=self,
+            ):
+                return self.ask_new_local_path()
 
         return new_filename
 
@@ -513,10 +501,7 @@ class Editor(ttk.Frame):
         self._code_view.text.set_read_only(False)
 
     def _control_tab(self, event):
-        if event.state & 1:  # shift was pressed
-            direction = -1
-        else:
-            direction = 1
+        direction = -1 if event.state & 1 else 1
         self.master.select_next_prev_editor(direction)
         return "break"
 
@@ -574,12 +559,14 @@ class Editor(ttk.Frame):
         if "." not in name:
             if without_asking or messagebox.askyesno(
                 title=tr("Confirmation"),
-                message=tr("Python files usually have .py extension.")
-                + "\n\n"
-                + tr("Did you mean '%s'?" % (name + ".py")),
+                message=(
+                    tr("Python files usually have .py extension.")
+                    + "\n\n"
+                    + tr(f"Did you mean '{name}.py'?")
+                ),
                 parent=self.winfo_toplevel(),
             ):
-                return path + ".py"
+                return f"{path}.py"
             else:
                 return path
 
@@ -773,7 +760,7 @@ class EditorNotebook(ui_utils.ClosableNotebook):
             os.path.abspath(name) for name in sys.argv[1:] if os.path.exists(name)
         ]
 
-        if len(cmd_line_filenames) > 0:
+        if cmd_line_filenames:
             filenames = cmd_line_filenames
         elif get_workbench().get_option("file.reopen_all_files"):
             filenames = get_workbench().get_option("file.open_files")
@@ -789,7 +776,7 @@ class EditorNotebook(ui_utils.ClosableNotebook):
 
             cur_file = get_workbench().get_option("file.current_file")
             # choose correct active file
-            if len(cmd_line_filenames) > 0:
+            if cmd_line_filenames:
                 self.show_file(cmd_line_filenames[0])
             elif cur_file and os.path.exists(cur_file):
                 self.show_file(cur_file)
@@ -877,11 +864,11 @@ class EditorNotebook(ui_utils.ClosableNotebook):
             )
         else:
             assert node == "remote"
-            target_path = ask_backend_path(self.winfo_toplevel(), "open")
-            if not target_path:
-                return
+            if target_path := ask_backend_path(self.winfo_toplevel(), "open"):
+                path = make_remote_path(target_path)
 
-            path = make_remote_path(target_path)
+            else:
+                return
 
         if path:
             # self.close_single_untitled_unmodified_editor()
@@ -896,19 +883,16 @@ class EditorNotebook(ui_utils.ClosableNotebook):
         for tab_index in reversed(range(len(self.winfo_children()))):
             if except_index is not None and tab_index == except_index:
                 continue
-            else:
-                editor = self.get_child_by_index(tab_index)
-                if self.check_allow_closing(editor):
-                    self.forget(editor)
-                    editor.destroy()
+            editor = self.get_child_by_index(tab_index)
+            if self.check_allow_closing(editor):
+                self.forget(editor)
+                editor.destroy()
 
     def _cmd_close_file(self):
         self.close_tab(self.index(self.select()))
 
     def close_tab(self, index):
-        editor = self.get_child_by_index(index)
-
-        if editor:
+        if editor := self.get_child_by_index(index):
             self.close_editor(editor)
 
     def close_editor(self, editor, force=False):
@@ -932,10 +916,9 @@ class EditorNotebook(ui_utils.ClosableNotebook):
                 self.update_editor_title(editor)
 
     def _cmd_save_all_files_enabled(self):
-        for editor in self.get_all_editors():
-            if editor.save_file_enabled() == True:
-                return True
-        return False
+        return any(
+            editor.save_file_enabled() == True for editor in self.get_all_editors()
+        )
 
     def _cmd_save_file_as(self, node=None):
         if not self.get_current_editor():
@@ -960,11 +943,7 @@ class EditorNotebook(ui_utils.ClosableNotebook):
         old_filename = editor.get_filename()
         assert old_filename is not None
 
-        if is_remote_path(old_filename):
-            node = "remote"
-        else:
-            node = "local"
-
+        node = "remote" if is_remote_path(old_filename) else "local"
         self._cmd_save_file_as(node=node)
 
         if editor.get_filename() != old_filename:
@@ -972,7 +951,9 @@ class EditorNotebook(ui_utils.ClosableNotebook):
                 remote_path = extract_target_path(old_filename)
                 get_runner().send_command_and_wait(
                     InlineCommand(
-                        "delete", paths=[remote_path], description=tr("Deleting" + remote_path)
+                        "delete",
+                        paths=[remote_path],
+                        description=tr(f"Deleting{remote_path}"),
                     ),
                     dialog_title=tr("Deleting"),
                 )
@@ -994,10 +975,10 @@ class EditorNotebook(ui_utils.ClosableNotebook):
             self._cmd_close_file()
 
     def _cmd_goto_source_line(self):
-        editor = self.get_current_editor()
-        if editor:
-            line_no = simpledialog.askinteger(tr("Go to line"), tr("Line number"))
-            if line_no:
+        if editor := self.get_current_editor():
+            if line_no := simpledialog.askinteger(
+                tr("Go to line"), tr("Line number")
+            ):
                 editor.select_line(line_no)
 
     def _mac_open_document(self, *args):
@@ -1011,10 +992,7 @@ class EditorNotebook(ui_utils.ClosableNotebook):
 
     def get_current_editor_content(self):
         editor = self.get_current_editor()
-        if editor is None:
-            return None
-        else:
-            return editor.get_content()
+        return None if editor is None else editor.get_content()
 
     def get_all_editors(self):
         # When workspace is closing, self.winfo_children()
@@ -1027,18 +1005,17 @@ class EditorNotebook(ui_utils.ClosableNotebook):
         self.select(self.get_child_by_index(next_index))
 
     def file_is_opened(self, path):
-        for editor in self.get_all_editors():
-            if editor.get_filename() and is_same_path(path, editor.get_filename()):
-                return True
-
-        return False
+        return any(
+            editor.get_filename() and is_same_path(path, editor.get_filename())
+            for editor in self.get_all_editors()
+        )
 
     def show_file(self, filename, text_range=None, set_focus=True, propose_dialog=True):
         # self.close_single_untitled_unmodified_editor()
         try:
             editor = self.get_editor(filename, True)
         except PermissionError:
-            logger.exception("Loading " + filename)
+            logger.exception(f"Loading {filename}")
             msg = "Got permission error when trying to load\n" + filename
             if running_on_mac_os() and propose_dialog:
                 msg += "\n\nTry opening it with File => Open."
@@ -1059,10 +1036,11 @@ class EditorNotebook(ui_utils.ClosableNotebook):
         return editor
 
     def show_remote_file(self, target_filename):
-        if not get_runner().ready_for_remote_file_operations(show_message=True):
-            return None
-        else:
-            return self.show_file(make_remote_path(target_filename))
+        return (
+            self.show_file(make_remote_path(target_filename))
+            if get_runner().ready_for_remote_file_operations(show_message=True)
+            else None
+        )
 
     def show_file_at_line(self, filename, lineno, col_offset=None):
         editor = self.show_file(filename)
@@ -1126,19 +1104,15 @@ class EditorNotebook(ui_utils.ClosableNotebook):
             if child_identifier == filename_or_id:
                 return child
 
-        if open_when_necessary:
-            return self._open_file(filename_or_id)
-        else:
-            return None
+        return self._open_file(filename_or_id) if open_when_necessary else None
 
     def check_allow_closing(self, editor=None):
         if not editor:
             modified_editors = [e for e in self.winfo_children() if e.is_modified()]
+        elif editor.is_modified():
+            modified_editors = [editor]
         else:
-            if not editor.is_modified():
-                return True
-            else:
-                modified_editors = [editor]
+            return True
         if len(modified_editors) == 0:
             return True
 
@@ -1146,17 +1120,17 @@ class EditorNotebook(ui_utils.ClosableNotebook):
         if editor:
             message = tr("Do you want to save file before closing?")
 
-        confirm = messagebox.askyesnocancel(
-            title=tr("Save On Close"), message=message, default=messagebox.YES, master=self
-        )
-
-        if confirm:
+        if confirm := messagebox.askyesnocancel(
+            title=tr("Save On Close"),
+            message=message,
+            default=messagebox.YES,
+            master=self,
+        ):
             for editor_ in modified_editors:
                 assert isinstance(editor_, Editor)
-                if editor_.get_filename(True):
-                    if not editor_.save_file():
-                        return False
-                else:
+                if not editor_.get_filename(True):
+                    return False
+                if not editor_.save_file():
                     return False
             return True
 
@@ -1183,10 +1157,8 @@ def get_current_breakpoints():
     result = {}
 
     for editor in get_workbench().get_editor_notebook().get_all_editors():
-        filename = editor.get_filename()
-        if filename:
-            linenos = editor.get_code_view().get_breakpoint_line_numbers()
-            if linenos:
+        if filename := editor.get_filename():
+            if linenos := editor.get_code_view().get_breakpoint_line_numbers():
                 result[filename] = linenos
 
     return result

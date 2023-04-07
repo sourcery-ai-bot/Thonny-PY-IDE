@@ -47,7 +47,7 @@ class HelpView(TextFrame):
         self.load_rst_file("index.rst")
 
     def load_topic(self, topic, fragment=None):
-        self.load_rst_file(topic + ".rst")
+        self.load_rst_file(f"{topic}.rst")
         # TODO: scroll to fragment
 
     def load_rst_file(self, filename):

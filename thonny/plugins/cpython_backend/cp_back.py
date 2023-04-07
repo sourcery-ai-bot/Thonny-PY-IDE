@@ -229,10 +229,7 @@ class MainCPythonBackend(MainBackend):
         self.save_settings()
 
     def _parse_option_name(self, name):
-        if "." in name:
-            return name.split(".", 1)
-        else:
-            return "general", name
+        return name.split(".", 1) if "." in name else ("general", name)
 
     def _get_ini(self):
         if self._ini is None:
@@ -345,17 +342,16 @@ class MainCPythonBackend(MainBackend):
         )
 
     def _cmd_cd(self, cmd):
-        if len(cmd.args) == 1:
-            path = cmd.args[0]
-            try:
-                os.chdir(path)
-                return ToplevelResponse()
-            except FileNotFoundError:
-                raise UserError("No such folder: " + path)
-            except OSError as e:
-                raise UserError("\n".join(traceback.format_exception_only(type(e), e)))
-        else:
+        if len(cmd.args) != 1:
             raise UserError("cd takes one parameter")
+        path = cmd.args[0]
+        try:
+            os.chdir(path)
+            return ToplevelResponse()
+        except FileNotFoundError:
+            raise UserError(f"No such folder: {path}")
+        except OSError as e:
+            raise UserError("\n".join(traceback.format_exception_only(type(e), e)))
 
     def _cmd_Run(self, cmd):
         report_time("Before Run")
@@ -497,10 +493,7 @@ class MainCPythonBackend(MainBackend):
         raise RuntimeError("Frame '{0}' not found".format(cmd.frame_id))
 
     def _cmd_get_heap(self, cmd):
-        result = {}
-        for key in self._heap:
-            result[key] = self.export_value(self._heap[key])
-
+        result = {key: self.export_value(self._heap[key]) for key in self._heap}
         return InlineResponse("get_heap", heap=result)
 
     def _cmd_get_object_info(self, cmd):
@@ -557,7 +550,7 @@ class MainCPythonBackend(MainBackend):
                 try:
                     tweaker(value, info, cmd)
                 except Exception:
-                    logger.exception("Failed object info tweaker: " + str(tweaker))
+                    logger.exception(f"Failed object info tweaker: {str(tweaker)}")
 
         else:
             info = {"id": cmd.object_id, "error": "object info not available"}
@@ -578,15 +571,16 @@ class MainCPythonBackend(MainBackend):
 
                     shutil.rmtree(path)
             except Exception as e:
-                print("Could not delete %s: %s" % (path, str(e)), file=sys.stderr)
+                print(f"Could not delete {path}: {str(e)}", file=sys.stderr)
 
     def _perform_pip_operation_and_list(
         self, cmd_line: List[str]
     ) -> Tuple[int, Dict[str, DistInfo]]:
         extra_switches = ["--disable-pip-version-check"]
-        proxy = os.environ.get("https_proxy", os.environ.get("http_proxy", None))
-        if proxy:
-            extra_switches.append("--proxy=" + proxy)
+        if proxy := os.environ.get(
+            "https_proxy", os.environ.get("http_proxy", None)
+        ):
+            extra_switches.append(f"--proxy={proxy}")
 
         returncode = subprocess.call([sys.executable, "-m", "pip"] + extra_switches + cmd_line)
         return returncode, self._get_distributions_info()
@@ -685,12 +679,11 @@ class MainCPythonBackend(MainBackend):
             return None
 
         app_class = getattr(mod, "QCoreApplication", None)
-        if app_class is not None:
-            try:
-                return app_class.instance()
-            except Exception:
-                return None
-        else:
+        if app_class is None:
+            return None
+        try:
+            return app_class.instance()
+        except Exception:
             return None
 
     def _add_file_handler_info(self, value, info):
@@ -706,7 +699,7 @@ class MainCPythonBackend(MainBackend):
                 info["file_content"] = f.read()
                 info["file_tell"] = value.tell()
         except Exception as e:
-            info["file_error"] = "Could not get file content, error:" + str(e)
+            info["file_error"] = f"Could not get file content, error:{str(e)}"
 
     def _add_function_info(self, value, info):
         try:
@@ -732,32 +725,31 @@ class MainCPythonBackend(MainBackend):
         report_time("Starting _execute_file")
         self._check_update_tty_mode(cmd)
 
-        if len(cmd.args) >= 1:
-            sys.argv = cmd.args
-            filename = cmd.args[0]
-            if filename == "-c":
-                tweaked_filename = STRING_PSEUDO_FILENAME
-            elif os.path.isabs(filename):
-                tweaked_filename = filename
-            else:
-                tweaked_filename = os.path.abspath(filename)
-
-            if tweaked_filename == STRING_PSEUDO_FILENAME:
-                source = cmd.source
-            else:
-                with tokenize.open(tweaked_filename) as fp:
-                    source = fp.read()
-
-            for preproc in self._source_preprocessors:
-                source = preproc(source, cmd)
-            report_time("Done preprocessing")
-            result_attributes = self._execute_source(
-                source, tweaked_filename, "exec", executor_class, cmd, self._ast_postprocessors
-            )
-            result_attributes["filename"] = tweaked_filename
-            return ToplevelResponse(command_name=cmd.name, **result_attributes)
+        if len(cmd.args) < 1:
+            raise UserError(f"Command '{cmd.name}' takes at least one argument")
+        sys.argv = cmd.args
+        filename = cmd.args[0]
+        if filename == "-c":
+            tweaked_filename = STRING_PSEUDO_FILENAME
+        elif os.path.isabs(filename):
+            tweaked_filename = filename
         else:
-            raise UserError("Command '%s' takes at least one argument" % cmd.name)
+            tweaked_filename = os.path.abspath(filename)
+
+        if tweaked_filename == STRING_PSEUDO_FILENAME:
+            source = cmd.source
+        else:
+            with tokenize.open(tweaked_filename) as fp:
+                source = fp.read()
+
+        for preproc in self._source_preprocessors:
+            source = preproc(source, cmd)
+        report_time("Done preprocessing")
+        result_attributes = self._execute_source(
+            source, tweaked_filename, "exec", executor_class, cmd, self._ast_postprocessors
+        )
+        result_attributes["filename"] = tweaked_filename
+        return ToplevelResponse(command_name=cmd.name, **result_attributes)
 
     def _execute_source(
         self, source, filename, execution_mode, executor_class, cmd, ast_postprocessors=[]
@@ -779,9 +771,9 @@ class MainCPythonBackend(MainBackend):
                 try:
                     obj_repr = repr(obj)
                     if len(obj_repr) > 5000:
-                        obj_repr = obj_repr[:5000] + "…"
+                        obj_repr = f"{obj_repr[:5000]}…"
                 except Exception as e:
-                    obj_repr = "<repr error: " + str(e) + ">"
+                    obj_repr = f"<repr error: {str(e)}>"
                 print(OBJECT_LINK_START % id(obj), obj_repr, OBJECT_LINK_END, sep="")
                 self._heap[id(obj)] = obj
                 builtins._ = obj
@@ -841,7 +833,7 @@ class MainCPythonBackend(MainBackend):
             rep = "??? <repr error>"
 
         if len(rep) > max_repr_length:
-            rep = rep[:max_repr_length] + "…"
+            rep = f"{rep[:max_repr_length]}…"
 
         return ValueInfo(id(value), rep)
 
@@ -862,7 +854,7 @@ class MainCPythonBackend(MainBackend):
             raise RuntimeError("Module '{0}' is not loaded".format(module_name))
 
     def _debug(self, *args):
-        logger.debug("MainCPythonBackend: " + str(args))
+        logger.debug(f"MainCPythonBackend: {args}")
 
     def _enter_io_function(self):
         self._io_level += 1
@@ -978,7 +970,7 @@ class MainCPythonBackend(MainBackend):
 
             msg = (
                 traceback.format_exception_only(e_type, e_value)[-1]
-                .replace(e_type.__name__ + ":", "")
+                .replace(f"{e_type.__name__}:", "")
                 .strip()
             )
         else:
@@ -1122,11 +1114,10 @@ class FakeInputStream(FakeStream):
         return self._generic_read("readlines", limit).splitlines(True)
 
     def __next__(self):
-        result = self.readline()
-        if not result:
+        if result := self.readline():
+            return result
+        else:
             raise StopIteration
-
-        return result
 
     def __iter__(self):
         return self
@@ -1152,9 +1143,7 @@ def return_execution_result(method):
     def wrapper(self, *args, **kwargs):
         try:
             result = method(self, *args, **kwargs)
-            if result is not None:
-                return result
-            return {}
+            return result if result is not None else {}
         except (Exception, KeyboardInterrupt):
             return {"user_exception": self._backend._prepare_user_exception()}
 
@@ -1263,12 +1252,17 @@ def _fetch_frame_source_info(frame):
             # in the beginning of the source,
             # then play safe and return the whole script
             first_line = source.splitlines()[0]
-            if re.search(r"\b(class|def)\b\s+\b%s\b" % frame.f_code.co_name, first_line) is None:
-                with tokenize.open(frame.f_code.co_filename) as fp:
-                    return fp.read(), 1, is_libra
-
-            else:
+            if (
+                re.search(
+                    r"\b(class|def)\b\s+\b%s\b" % frame.f_code.co_name,
+                    first_line,
+                )
+                is not None
+            ):
                 return source, frame.f_code.co_firstlineno, is_libra
+            with tokenize.open(frame.f_code.co_filename) as fp:
+                return fp.read(), 1, is_libra
+
         except OSError:
             logger.exception("Problem getting source")
             return None, None, True
@@ -1318,9 +1312,10 @@ def format_exception_with_frame_info(e_type, e_value, e_traceback, shorten_filen
                 assert tb_temp is not None  # actual tb doesn't end before extract_tb
                 if (
                     "cpython_backend" not in entry.filename
-                    and "thonny/backend" not in entry.filename.replace("\\", "/")
+                    and "thonny/backend"
+                    not in entry.filename.replace("\\", "/")
                     and (
-                        not entry.filename.endswith(os.sep + "ast.py")
+                        not entry.filename.endswith(f"{os.sep}ast.py")
                         or entry.name != "parse"
                         or not isinstance(e_value, SyntaxError)
                     )

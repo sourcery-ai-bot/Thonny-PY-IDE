@@ -242,7 +242,7 @@ class Workbench(tk.Tk):
         if home_dir == "~":
             bad_home_msg = "Can not find your home directory."
         elif not os.path.exists(home_dir):
-            bad_home_msg = "Reported home directory (%s) does not exist." % home_dir
+            bad_home_msg = f"Reported home directory ({home_dir}) does not exist."
         if bad_home_msg:
             messagebox.showwarning(
                 "Problems with home directory",
@@ -403,7 +403,7 @@ class Workbench(tk.Tk):
                     if hasattr(m, load_function_name):
                         modules.append(m)
                 except Exception:
-                    logger.exception("Failed loading plugin '" + module_name + "'")
+                    logger.exception(f"Failed loading plugin '{module_name}'")
 
         def module_sort_key(m):
             return getattr(m, "load_order_key", m.__name__)
@@ -770,7 +770,7 @@ class Workbench(tk.Tk):
         }
 
         for nb_name in self._view_notebooks:
-            self.set_default("layout.notebook_" + nb_name + "_visible_view", None)
+            self.set_default(f"layout.notebook_{nb_name}_visible_view", None)
 
         self._editor_notebook = EditorNotebook(self._center_pw)
         self._editor_notebook.position_key = 1
@@ -802,10 +802,7 @@ class Workbench(tk.Tk):
         # Set up the menu
         self._backend_conf_variable = tk.StringVar(value="{}")
 
-        if running_on_mac_os():
-            menu_conf = {}
-        else:
-            menu_conf = get_style_configuration("Menu")
+        menu_conf = {} if running_on_mac_os() else get_style_configuration("Menu")
         self._backend_menu = tk.Menu(self._statusbar, tearoff=False, **menu_conf)
 
         # Set up the button.
@@ -892,12 +889,11 @@ class Workbench(tk.Tk):
         try:
             self._backend_menu.tk_popup(post_x, post_y)
         except tk.TclError as e:
-            if not 'unknown option "-state"' in str(e):
+            if 'unknown option "-state"' not in str(e):
                 logger.warning("Problem with switcher popup", exc_info=e)
 
     def _on_backend_restart(self, event):
-        proxy = get_runner().get_backend_proxy()
-        if proxy:
+        if proxy := get_runner().get_backend_proxy():
             conf = proxy.get_current_switcher_configuration()
             desc = proxy.get_switcher_configuration_label(conf)
             value = repr(conf)
@@ -1028,7 +1024,7 @@ class Workbench(tk.Tk):
                 handler()
             else:
                 denied = True
-                logger.debug("Command '" + command_id + "' execution denied")
+                logger.debug(f"Command '{command_id}' execution denied")
                 if bell_when_denied:
                     self.bell()
 
@@ -1038,7 +1034,7 @@ class Workbench(tk.Tk):
             if caps_lock_is_on(event) and not shift_is_pressed(event):
                 dispatch(event)
 
-        sequence_option_name = "shortcuts." + command_id
+        sequence_option_name = f"shortcuts.{command_id}"
         self.set_default(sequence_option_name, default_sequence)
         sequence = self.get_option(sequence_option_name)
 
@@ -1054,7 +1050,7 @@ class Workbench(tk.Tk):
                 # Python 3.7 on Mac seems to require lower letters for shift sequences.
                 parts = sequence.strip("<>").split("-")
                 if len(parts[-1]) == 1 and parts[-1].islower() and "Shift" not in parts:
-                    lock_sequence = "<%s-Lock-%s>" % ("-".join(parts[:-1]), parts[-1].upper())
+                    lock_sequence = f'<{"-".join(parts[:-1])}-Lock-{parts[-1].upper()}>'
                     self.bind_all(lock_sequence, dispatch_if_caps_lock_is_on, True)
 
             # register shortcut even without binding
@@ -1161,23 +1157,25 @@ class Workbench(tk.Tk):
         Returns: None
         """
         view_id = cls.__name__
-        if default_position_key == None:
+        if default_position_key is None:
             default_position_key = label
 
-        self.set_default("view." + view_id + ".visible", visible_by_default)
-        self.set_default("view." + view_id + ".location", default_location)
-        self.set_default("view." + view_id + ".position_key", default_position_key)
+        self.set_default(f"view.{view_id}.visible", visible_by_default)
+        self.set_default(f"view.{view_id}.location", default_location)
+        self.set_default(f"view.{view_id}.position_key", default_position_key)
 
         if self.in_simple_mode():
             visibility_flag = tk.BooleanVar(value=view_id in SIMPLE_MODE_VIEWS)
         else:
-            visibility_flag = cast(tk.BooleanVar, self.get_variable("view." + view_id + ".visible"))
+            visibility_flag = cast(
+                tk.BooleanVar, self.get_variable(f"view.{view_id}.visible")
+            )
 
         self._view_records[view_id] = {
             "class": cls,
             "label": label,
-            "location": self.get_option("view." + view_id + ".location"),
-            "position_key": self.get_option("view." + view_id + ".position_key"),
+            "location": self.get_option(f"view.{view_id}.location"),
+            "position_key": self.get_option(f"view.{view_id}.position_key"),
             "visibility_flag": visibility_flag,
         }
 
@@ -1189,11 +1187,11 @@ class Workbench(tk.Tk):
                 self.show_view(view_id, True)
 
         self.add_command(
-            "toggle_" + view_id,
+            f"toggle_{view_id}",
             menu_name="view",
             command_label=label,
             handler=toggle_view_visibility,
-            flag_name="view." + view_id + ".visible",
+            flag_name=f"view.{view_id}.visible",
             group=10,
             position_in_group="alphabetic",
         )
@@ -1266,11 +1264,7 @@ class Workbench(tk.Tk):
             # using int instead of round so that thin lines will stay
             # one pixel even with scaling_factor 1.67
             result = int(self._scaling_factor * value)
-            if result == 0 and value > 0:
-                # don't lose thin lines because of scaling
-                return 1
-            else:
-                return result
+            return 1 if result == 0 and value > 0 else result
         else:
             raise NotImplementedError("Only numeric dimensions supported at the moment")
 
@@ -1322,15 +1316,13 @@ class Workbench(tk.Tk):
 
         # https://wiki.tcl.tk/37973#pagetocfe8b22ab
         for setting in ["background", "foreground", "selectBackground", "selectForeground"]:
-            value = self._style.lookup("Listbox", setting)
-            if value:
-                self.option_add("*TCombobox*Listbox." + setting, value)
-                self.option_add("*Listbox." + setting, value)
+            if value := self._style.lookup("Listbox", setting):
+                self.option_add(f"*TCombobox*Listbox.{setting}", value)
+                self.option_add(f"*Listbox.{setting}", value)
 
-        text_opts = self._style.configure("Text")
-        if text_opts:
+        if text_opts := self._style.configure("Text"):
             for key in text_opts:
-                self.option_add("*Text." + key, text_opts[key])
+                self.option_add(f"*Text.{key}", text_opts[key])
 
         if hasattr(self, "_menus"):
             # if menus have been initialized, ie. when theme is being changed
@@ -1344,7 +1336,7 @@ class Workbench(tk.Tk):
             try:
                 parent, settings = self._syntax_themes[name]
             except KeyError:
-                self.report_exception("Can't find theme '%s'" % name)
+                self.report_exception(f"Can't find theme '{name}'")
                 return {}
 
             if callable(settings):
@@ -1352,14 +1344,13 @@ class Workbench(tk.Tk):
 
             if parent is None:
                 return settings
-            else:
-                result = get_settings(parent)
-                for key in settings:
-                    if key in result:
-                        result[key].update(settings[key])
-                    else:
-                        result[key] = settings[key]
-                return result
+            result = get_settings(parent)
+            for key in settings:
+                if key in result:
+                    result[key].update(settings[key])
+                else:
+                    result[key] = settings[key]
+            return result
 
         from thonny import codeview
 
@@ -1395,10 +1386,7 @@ class Workbench(tk.Tk):
             return "clam"
 
     def get_default_syntax_theme(self) -> str:
-        if self.uses_dark_ui_theme():
-            return "Default Dark"
-        else:
-            return "Default Light"
+        return "Default Dark" if self.uses_dark_ui_theme() else "Default Light"
 
     def uses_dark_ui_theme(self) -> bool:
         name = self._style.theme_use()
@@ -1506,7 +1494,7 @@ class Workbench(tk.Tk):
         arg_str = arg_str.strip()
         self.set_option("run.program_arguments", arg_str)
 
-        if arg_str == "":
+        if not arg_str:
             # empty will be handled differently
             return
 
@@ -1527,7 +1515,7 @@ class Workbench(tk.Tk):
                 try:
                     self.show_view(view_id, False)
                 except Exception:
-                    self.report_exception("Problem showing " + view_id)
+                    self.report_exception(f"Problem showing {view_id}")
 
     def update_image_mapping(self, mapping: Dict[str, str]) -> None:
         """Was used by thonny-pi. Not recommended anymore"""
@@ -1580,18 +1568,14 @@ class Workbench(tk.Tk):
         """
 
         # For compatibility with plug-ins
-        if name in ["device", "tempdevice"] and label is None:
+        if name in {"device", "tempdevice"} and label is None:
             label = tr("Device")
 
         if name not in self._menus:
-            if running_on_mac_os():
-                conf = {}
-            else:
-                conf = get_style_configuration("Menu")
-
+            conf = {} if running_on_mac_os() else get_style_configuration("Menu")
             menu = tk.Menu(self._menubar, **conf)
             menu["postcommand"] = lambda: self._update_menu(menu, name)
-            self._menubar.add_cascade(label=label if label else name, menu=menu)
+            self._menubar.add_cascade(label=label or name, menu=menu)
 
             self._menus[name] = menu
             if label:
@@ -1602,7 +1586,7 @@ class Workbench(tk.Tk):
     def get_view(self, view_id: str, create: bool = True) -> tk.Widget:
         if "instance" not in self._view_records[view_id]:
             if not create:
-                raise RuntimeError("View %s not created" % view_id)
+                raise RuntimeError(f"View {view_id} not created")
             class_ = self._view_records[view_id]["class"]
             location = self._view_records[view_id]["location"]
             master = self._view_notebooks[location]
@@ -1648,20 +1632,21 @@ class Workbench(tk.Tk):
         if not os.path.isabs(filename):
             filename = os.path.join(self.get_package_dir(), "res", filename)
             if not os.path.exists(filename):
-                if os.path.exists(filename + ".png"):
-                    filename = filename + ".png"
-                elif os.path.exists(filename + ".gif"):
-                    filename = filename + ".gif"
+                if os.path.exists(f"{filename}.png"):
+                    filename = f"{filename}.png"
+                elif os.path.exists(f"{filename}.gif"):
+                    filename = f"{filename}.gif"
 
         if disabled:
             filename = os.path.join(
-                os.path.dirname(filename), "_disabled_" + os.path.basename(filename)
+                os.path.dirname(filename),
+                f"_disabled_{os.path.basename(filename)}",
             )
             if not os.path.exists(filename):
                 return None
 
         # are there platform-specific variants?
-        plat_filename = filename[:-4] + "_" + platform.system() + ".png"
+        plat_filename = f"{filename[:-4]}_{platform.system()}.png"
         if os.path.exists(plat_filename):
             filename = plat_filename
 
@@ -1672,8 +1657,8 @@ class Workbench(tk.Tk):
             and not filename.endswith("48.png")
             or treeview_rowheight > threshold * 1.5
         ):
-            scaled_filename = filename[:-4] + "_2x.png"
-            scaled_filename_alt = filename[:-4] + "48.png"  # used in pi theme
+            scaled_filename = f"{filename[:-4]}_2x.png"
+            scaled_filename_alt = f"{filename[:-4]}48.png"
             if os.path.exists(scaled_filename):
                 filename = scaled_filename
             elif os.path.exists(scaled_filename_alt):
@@ -1717,9 +1702,7 @@ class Workbench(tk.Tk):
             return False
 
         if view.hidden:  # type: ignore
-            label = None
-            if hasattr(view, "get_tab_text"):
-                label = view.get_tab_text()
+            label = view.get_tab_text() if hasattr(view, "get_tab_text") else None
             if not label:
                 label = self._view_records[view_id]["label"]
             notebook.insert("auto", view.home_widget, text=label)  # type: ignore
@@ -1734,7 +1717,7 @@ class Workbench(tk.Tk):
         if set_focus:
             view.focus_set()
 
-        self.set_option("view." + view_id + ".visible", True)
+        self.set_option(f"view.{view_id}.visible", True)
         self.event_generate("ShowView", view=view, view_id=view_id)
         return view
 
@@ -1751,7 +1734,7 @@ class Workbench(tk.Tk):
                 return False
 
             view.home_widget.master.forget(view.home_widget)
-            self.set_option("view." + view_id + ".visible", False)
+            self.set_option(f"view.{view_id}.visible", False)
 
             self.event_generate("HideView", view=view, view_id=view_id)
             view.hidden = True
@@ -1766,35 +1749,32 @@ class Workbench(tk.Tk):
         if sequence.startswith("<"):
             assert event is None
             tk.Tk.event_generate(self, sequence, **kwargs)
-        else:
-            if sequence in self._event_handlers:
-                if event is None:
-                    event = WorkbenchEvent(sequence, **kwargs)
-                else:
-                    event.update(kwargs)
+        elif sequence in self._event_handlers:
+            if event is None:
+                event = WorkbenchEvent(sequence, **kwargs)
+            else:
+                event.update(kwargs)
 
                 # make a copy of handlers, so that event handler can remove itself
                 # from the registry during iteration
                 # (or new handlers can be added)
-                for handler in sorted(self._event_handlers[sequence].copy(), key=str):
-                    try:
-                        handler(event)
-                    except Exception:
-                        self.report_exception("Problem when handling '" + sequence + "'")
+            for handler in sorted(self._event_handlers[sequence].copy(), key=str):
+                try:
+                    handler(event)
+                except Exception:
+                    self.report_exception(f"Problem when handling '{sequence}'")
 
         if not self._closing:
             self._update_toolbar()
 
-    def bind(self, sequence: str, func: Callable, add: bool = None) -> None:  # type: ignore
+    def bind(self, sequence: str, func: Callable, add: bool = None) -> None:    # type: ignore
         """Uses custom event handling when sequence doesn't start with <.
         Otherwise forwards the call to Tk's bind"""
         # pylint: disable=signature-differs
 
         if not add:
             logger.warning(
-                "Workbench.bind({}, ..., add={}) -- did you really want to replace existing bindings?".format(
-                    sequence, add
-                )
+                f"Workbench.bind({sequence}, ..., add={add}) -- did you really want to replace existing bindings?"
             )
 
         if sequence.startswith("<"):
@@ -1975,16 +1955,13 @@ class Workbench(tk.Tk):
         tester: Optional[Callable[[], bool]],
         toolbar_group: int,
     ) -> None:
-        assert caption is not None and len(caption) > 0, (
-            "Missing caption for '%s'. Toolbar commands must have caption." % command_label
-        )
+        assert (
+            caption is not None and caption != ""
+        ), f"Missing caption for '{command_label}'. Toolbar commands must have caption."
         slaves = self._toolbar.grid_slaves(0, toolbar_group)
         if len(slaves) == 0:
             group_frame = ttk.Frame(self._toolbar)
-            if self.in_simple_mode():
-                padx = 0  # type: Union[int, Tuple[int, int]]
-            else:
-                padx = (0, ems_to_pixels(1))
+            padx = 0 if self.in_simple_mode() else (0, ems_to_pixels(1))
             group_frame.grid(row=0, column=toolbar_group, padx=padx)
         else:
             group_frame = slaves[0]
@@ -2033,7 +2010,7 @@ class Workbench(tk.Tk):
             if accelerator and lookup_style_option(
                 "OPTIONS", "shortcuts_in_tooltips", default=True
             ):
-                tooltip_text += " (" + accelerator + ")"
+                tooltip_text += f" ({accelerator})"
             create_tooltip(button, tooltip_text)
 
         self._toolbar_buttons[command_id] = button
@@ -2253,13 +2230,13 @@ class Workbench(tk.Tk):
     def _find_location_for_menu_item(self, menu_name: str, command_label: str) -> Union[str, int]:
         menu = self.get_menu(menu_name)
 
-        if menu.index("end") == None:  # menu is empty
+        if menu.index("end") is None:  # menu is empty
             return "end"
 
         specs = self._menu_item_specs[(menu_name, command_label)]
 
         this_group_exists = False
-        for i in range(0, menu.index("end") + 1):
+        for i in range(menu.index("end") + 1):
             data = menu.entryconfigure(i)
             if "label" in data:
                 # it's a command, not separator
@@ -2277,11 +2254,9 @@ class Workbench(tk.Tk):
                     )  # otherwise we would have found the ending separator
                     menu.insert_separator(i)
                     return i
-            else:
-                # We found a separator
-                if this_group_exists:
-                    # it must be the ending separator for this group
-                    return i
+            elif this_group_exists:
+                # it must be the ending separator for this group
+                return i
 
         # no group was bigger, ie. this should go to the end
         if not this_group_exists:
@@ -2340,10 +2315,9 @@ class Workbench(tk.Tk):
             self.event_generate("WindowFocusIn")
 
     def _on_focus_out(self, event):
-        if self.focus_get() is None:
-            if not self._lost_focus:
-                self._lost_focus = True
-                self.event_generate("WindowFocusOut")
+        if self.focus_get() is None and not self._lost_focus:
+            self._lost_focus = True
+            self.event_generate("WindowFocusOut")
 
     def focus_get(self) -> Optional[tk.Widget]:
         try:
@@ -2368,15 +2342,9 @@ class Workbench(tk.Tk):
             # https://stackoverflow.com/questions/26321333/tkinter-in-python-3-4-on-windows-dont-post-internal-clipboard-data-to-the-windo
             try:
                 clipboard_data = self.clipboard_get()
-                if len(clipboard_data) < 1000 and all(
+                if len(clipboard_data) >= 1000 or not all(
                     map(os.path.exists, clipboard_data.splitlines())
                 ):
-                    # Looks like the clipboard contains file name(s)
-                    # Most likely this means actual file cut/copy operation
-                    # was made outside Thonny.
-                    # Don't want to replace this with simple string data of file names.
-                    pass
-                else:
                     copy_to_clipboard(clipboard_data)
             except Exception:
                 pass
@@ -2416,17 +2384,13 @@ class Workbench(tk.Tk):
         if tk._default_root and not self._closing:  # type: ignore
             (typ, value, _) = sys.exc_info()
             assert typ is not None
-            if issubclass(typ, UserError):
-                msg = str(value)
-            else:
-                msg = traceback.format_exc()
-
+            msg = str(value) if issubclass(typ, UserError) else traceback.format_exc()
             dlg = ui_utils.LongTextDialog(title, msg, parent=self)
             ui_utils.show_dialog(dlg, self)
 
     def _open_views(self) -> None:
         for nb_name in self._view_notebooks:
-            view_name = self.get_option("layout.notebook_" + nb_name + "_visible_view")
+            view_name = self.get_option(f"layout.notebook_{nb_name}_visible_view")
             if view_name != None:
                 if view_name == "GlobalsView":
                     # was renamed in 2.2b5
@@ -2457,9 +2421,9 @@ class Workbench(tk.Tk):
             if hasattr(widget, "maximizable_widget"):
                 view = widget.maximizable_widget
                 view_name = type(view).__name__
-                self.set_option("layout.notebook_" + nb_name + "_visible_view", view_name)
+                self.set_option(f"layout.notebook_{nb_name}_visible_view", view_name)
             else:
-                self.set_option("layout.notebook_" + nb_name + "_visible_view", None)
+                self.set_option(f"layout.notebook_{nb_name}_visible_view", None)
 
         if not ui_utils.get_zoomed(self) or running_on_mac_os():
             # can't restore zoom on mac without setting actual dimensions
@@ -2473,17 +2437,15 @@ class Workbench(tk.Tk):
         self.set_option("layout.east_pw_width", self._east_pw.preferred_size_in_pw)
         for key in ["nw", "sw", "s", "se", "ne"]:
             self.set_option(
-                "layout.%s_nb_height" % key, self._view_notebooks[key].preferred_size_in_pw
+                f"layout.{key}_nb_height",
+                self._view_notebooks[key].preferred_size_in_pw,
             )
 
     def update_title(self, event=None) -> None:
         editor = self.get_editor_notebook().get_current_editor()
-        if self._is_portable:
-            title_text = "Portable Thonny"
-        else:
-            title_text = "Thonny"
+        title_text = "Portable Thonny" if self._is_portable else "Thonny"
         if editor is not None:
-            title_text += "  -  " + editor.get_long_description()
+            title_text += f"  -  {editor.get_long_description()}"
 
         self.title(title_text)
 
@@ -2521,9 +2483,9 @@ class Workbench(tk.Tk):
     def open_url(self, url):
         m = re.match(r"^thonny-editor://(.*?)(#(\d+)(:(\d+))?)?$", url)
         if m is not None:
-            filename = m.group(1).replace("%20", " ")
-            lineno = None if m.group(3) is None else int(m.group(3))
-            col_offset = None if m.group(5) is None else int(m.group(5))
+            filename = m[1].replace("%20", " ")
+            lineno = None if m[3] is None else int(m[3])
+            col_offset = None if m[5] is None else int(m[5])
             if lineno is None:
                 self.get_editor_notebook().show_file(filename)
             else:
@@ -2533,19 +2495,15 @@ class Workbench(tk.Tk):
 
         m = re.match(r"^thonny-help://(.*?)(#(.+))?$", url)
         if m is not None:
-            topic = m.group(1)
-            fragment = m.group(3)
+            topic = m[1]
+            fragment = m[3]
             self.show_view("HelpView").load_topic(topic, fragment)
             return
 
         if url.endswith(".rst") and not url.startswith("http"):
             parts = url.split("#", maxsplit=1)
             topic = parts[0][:-4]
-            if len(parts) == 2:
-                fragment = parts[1]
-            else:
-                fragment = None
-
+            fragment = parts[1] if len(parts) == 2 else None
             self.show_view("HelpView").load_topic(topic, fragment)
             return
 

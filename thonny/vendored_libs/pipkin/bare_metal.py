@@ -104,11 +104,7 @@ class BareMetalAdapter(BaseAdapter, ABC):
             write_block_size = 255
 
         if write_block_delay is None:
-            if submit_mode == RAW_SUBMIT_MODE:
-                write_block_delay = 0.01
-            else:
-                write_block_delay = 0.0
-
+            write_block_delay = 0.01 if submit_mode == RAW_SUBMIT_MODE else 0.0
         return submit_mode, write_block_size, write_block_delay
 
     def _fetch_builtin_modules(self) -> List[str]:
@@ -217,10 +213,12 @@ class BareMetalAdapter(BaseAdapter, ABC):
         while True:
             if hex_mode:
                 block = binascii.unhexlify(
-                    self._evaluate("__temp_hexlify(__pipkin_fp.read(%s))" % block_size)
+                    self._evaluate(
+                        f"__temp_hexlify(__pipkin_fp.read({block_size}))"
+                    )
                 )
             else:
-                block = self._evaluate("__pipkin_fp.read(%s)" % block_size)
+                block = self._evaluate(f"__pipkin_fp.read({block_size})")
 
             if block:
                 blocks.append(block)
@@ -284,11 +282,7 @@ class BareMetalAdapter(BaseAdapter, ABC):
         )
 
     def list_meta_dir_names(self, path: str, dist_name: Optional[str] = None) -> List[str]:
-        if dist_name:
-            dist_name_condition = f"and name.startswith({dist_name+'-'!r})"
-        else:
-            dist_name_condition = ""
-
+        dist_name_condition = f"and name.startswith({dist_name}-)" if dist_name else ""
         return self._evaluate(
             dedent(
                 f"""
@@ -310,9 +304,7 @@ class BareMetalAdapter(BaseAdapter, ABC):
         to_be_sent = script.encode("UTF-8")
         logger.debug("Submitting via %s: %r", self._submit_mode, to_be_sent[:1000])
 
-        # assuming we are already at a prompt, but threads may have produced something extra
-        discarded_bytes = self._connection.read_all()
-        if discarded_bytes:
+        if discarded_bytes := self._connection.read_all():
             logger.info("Discarding %r", discarded_bytes)
 
         if self._submit_mode == PASTE_SUBMIT_MODE:
@@ -343,18 +335,18 @@ class BareMetalAdapter(BaseAdapter, ABC):
             while True:
                 expected_echo = block.replace(b"\r\n", b"\r\n" + PASTE_MODE_LINE_PREFIX)
                 if (
-                    len(expected_echo) > self._write_block_size
-                    or block.endswith(b"\r")
-                    or len(block) > 2
-                    and starts_with_continuation_byte(script_bytes)
+                    len(expected_echo) <= self._write_block_size
+                    and not block.endswith(b"\r")
+                    and (
+                        len(block) <= 2
+                        or not starts_with_continuation_byte(script_bytes)
+                    )
                 ):
-                    # move last byte to the next block
-                    script_bytes = block[-1:] + script_bytes
-                    block = block[:-1]
-                    continue
-                else:
                     break
 
+                # move last byte to the next block
+                script_bytes = block[-1:] + script_bytes
+                block = block[:-1]
             self._write(block)
             self._connection.read_all_expected(expected_echo, timeout=WAIT_OR_CRASH_TIMEOUT)
 
@@ -497,9 +489,9 @@ class BareMetalAdapter(BaseAdapter, ABC):
         logger.debug("requesting normal mode at %r", self._last_prompt)
         self._write(NORMAL_MODE_CMD)
         self._log_output_until_active_prompt()
-        assert self._last_prompt == NORMAL_PROMPT, (
-            "Could not get normal prompt, got %s" % self._last_prompt
-        )
+        assert (
+            self._last_prompt == NORMAL_PROMPT
+        ), f"Could not get normal prompt, got {self._last_prompt}"
 
     def _log_output_until_active_prompt(self, timeout: float = WAIT_OR_CRASH_TIMEOUT) -> None:
         def collect_output(data, stream):
@@ -637,11 +629,10 @@ class BareMetalAdapter(BaseAdapter, ABC):
         if "binascii" not in self._builtin_modules and "ubinascii" not in self._builtin_modules:
             return False
 
-        for ext in (".py", ".txt", ".csv", "METADATA", "RECORD"):
-            if path.lower().endswith(ext):
-                return False
-
-        return True
+        return not any(
+            path.lower().endswith(ext)
+            for ext in (".py", ".txt", ".csv", "METADATA", "RECORD")
+        )
 
     def _execute_without_output(self, script: str, timeout: float = WAIT_OR_CRASH_TIMEOUT) -> None:
         """Meant for management tasks."""
@@ -782,10 +773,7 @@ class SerialPortAdapter(BareMetalAdapter):
         to_be_written = content
         while to_be_written:
             block = to_be_written[:block_size]
-            if hex_mode:
-                script = "__W(%r)" % binascii.hexlify(block)
-            else:
-                script = "__W(%r)" % block
+            script = "__W(%r)" % binascii.hexlify(block) if hex_mode else "__W(%r)" % block
             out, err = self._execute_and_capture_output(script)
             if out or err:
                 logger.error("Writing file produced unexpected output (%r) or error (%r)", out, err)
@@ -864,12 +852,11 @@ class SerialPortAdapter(BareMetalAdapter):
 
     def _mkdir_via_mount(self, path: str) -> bool:
         mounted_path = self._internal_path_to_mounted_path(path)
-        if not os.path.isdir(mounted_path):
-            assert not os.path.exists(mounted_path)
-            os.mkdir(mounted_path, 0o755)
-            return True
-        else:
+        if os.path.isdir(mounted_path):
             return False
+        assert not os.path.exists(mounted_path)
+        os.mkdir(mounted_path, 0o755)
+        return True
 
     def remove_dir_if_empty(self, path: str) -> bool:
         if self._read_only_filesystem:
@@ -888,9 +875,8 @@ class SerialPortAdapter(BareMetalAdapter):
         mounted_path = self._internal_path_to_mounted_path(path)
         if os.listdir(mounted_path):
             return False
-        else:
-            os.rmdir(mounted_path)
-            return True
+        os.rmdir(mounted_path)
+        return True
 
 
 class WebReplAdapter(BareMetalAdapter):

@@ -218,11 +218,7 @@ class CustomMenubar(ttk.Frame):
             font="TkDefaultFont",
         )
 
-        if len(self._menus) == 0:
-            padx = (6, 0)
-        else:
-            padx = 0
-
+        padx = (6, 0) if len(self._menus) == 0 else 0
         label_widget.grid(row=0, column=len(self._menus), padx=padx)
 
         def enter(event):
@@ -290,20 +286,21 @@ class AutomaticPanedWindow(tk.PanedWindow):
         if pos == "auto":
             # According to documentation I should use self.panes()
             # but this doesn't return expected widgets
-            for sibling in sorted(
-                self.pane_widgets(),
-                key=lambda p: p.position_key if hasattr(p, "position_key") else 0,
-            ):
-                if (
-                    not hasattr(sibling, "position_key")
-                    or sibling.position_key == None
+            pos = next(
+                (
+                    sibling
+                    for sibling in sorted(
+                        self.pane_widgets(),
+                        key=lambda p: p.position_key
+                        if hasattr(p, "position_key")
+                        else 0,
+                    )
+                    if not hasattr(sibling, "position_key")
+                    or sibling.position_key is None
                     or sibling.position_key > child.position_key
-                ):
-                    pos = sibling
-                    break
-            else:
-                pos = "end"
-
+                ),
+                "end",
+            )
         if isinstance(pos, tk.Widget):
             kw["before"] = pos
 
@@ -332,10 +329,11 @@ class AutomaticPanedWindow(tk.PanedWindow):
         tk.PanedWindow.destroy(self)
 
     def is_visible(self):
-        if not isinstance(self.master, AutomaticPanedWindow):
-            return self.winfo_ismapped()
-        else:
-            return self in self.master.pane_widgets()
+        return (
+            self in self.master.pane_widgets()
+            if isinstance(self.master, AutomaticPanedWindow)
+            else self.winfo_ismapped()
+        )
 
     def pane_widgets(self):
         result = []
@@ -444,11 +442,7 @@ class AutomaticPanedWindow(tk.PanedWindow):
         else:
             result = self.winfo_height()
 
-        if result < 20:
-            # Not ready yet
-            return None
-        else:
-            return result
+        return None if result < 20 else result
 
     def _place_sash(self, i, distance):
         if self.cget("orient") == tk.HORIZONTAL:
@@ -556,22 +550,13 @@ class ClosableNotebook(ttk.Notebook):
             child.destroy()
 
     def get_child_by_index(self, index):
-        tab_id = self.tabs()[index]
-        if tab_id:
-            return self.nametowidget(tab_id)
-        else:
-            return None
+        return self.nametowidget(tab_id) if (tab_id := self.tabs()[index]) else None
 
     def get_current_child(self):
-        child_id = self.select()
-        if child_id:
-            return self.nametowidget(child_id)
-        else:
-            return None
+        return self.nametowidget(child_id) if (child_id := self.select()) else None
 
     def focus_set(self):
-        editor = self.get_current_child()
-        if editor:
+        if editor := self.get_current_child():
             editor.focus_set()
         else:
             super().focus_set()
@@ -685,17 +670,16 @@ class AutomaticNotebook(ClosableNotebook):
 
     def insert(self, pos, child, **kw):
         if pos == "auto":
-            for sibling in map(self.nametowidget, self.tabs()):
-                if (
-                    not hasattr(sibling, "position_key")
-                    or sibling.position_key == None
+            pos = next(
+                (
+                    sibling
+                    for sibling in map(self.nametowidget, self.tabs())
+                    if not hasattr(sibling, "position_key")
+                    or sibling.position_key is None
                     or sibling.position_key > child.position_key
-                ):
-                    pos = sibling
-                    break
-            else:
-                pos = "end"
-
+                ),
+                "end",
+            )
         super().insert(pos, child, **kw)
         self._update_visibility()
 
@@ -712,11 +696,14 @@ class AutomaticNotebook(ClosableNotebook):
         return self in self.master.pane_widgets()
 
     def get_visible_child(self):
-        for child in self.winfo_children():
-            if str(child) == str(self.select()):
-                return child
-
-        return None
+        return next(
+            (
+                child
+                for child in self.winfo_children()
+                if str(child) == str(self.select())
+            ),
+            None,
+        )
 
     def _update_visibility(self):
         if not isinstance(self.master, AutomaticPanedWindow):
@@ -799,7 +786,7 @@ def scrollbar_style(orientation):
     # see http://wiki.tcl.tk/44444#pagetoc50f90d9a
     # Native rendering doesn't look good in dark themes
     if running_on_mac_os() and get_workbench().uses_dark_ui_theme():
-        return orientation + ".TScrollbar"
+        return f"{orientation}.TScrollbar"
     else:
         return None
 
@@ -821,7 +808,7 @@ def sequence_to_accelerator(sequence):
     # Tweaking individual parts
     parts = accelerator.split("-")
     # tkinter shows shift with capital letter, but in shortcuts it's customary to include it explicitly
-    if len(parts[-1]) == 1 and parts[-1].isupper() and not "Shift" in parts:
+    if len(parts[-1]) == 1 and parts[-1].isupper() and "Shift" not in parts:
         parts.insert(-1, "Shift")
 
     # even when shift is not required, it's customary to show shortcut with capital letter
@@ -830,15 +817,12 @@ def sequence_to_accelerator(sequence):
 
     accelerator = "+".join(parts)
 
-    # Post processing
-    accelerator = (
+    return (
         accelerator.replace("Minus", "-")
         .replace("minus", "-")
         .replace("Plus", "+")
         .replace("plus", "+")
     )
-
-    return accelerator
 
 
 def get_zoomed(toplevel):
@@ -851,11 +835,10 @@ def get_zoomed(toplevel):
 def set_zoomed(toplevel, value):
     if "-zoomed" in toplevel.wm_attributes():  # Linux
         toplevel.wm_attributes("-zoomed", str(int(value)))
-    else:  # Win/Mac
-        if value:
-            toplevel.wm_state("zoomed")
-        else:
-            toplevel.wm_state("normal")
+    elif value:
+        toplevel.wm_state("zoomed")
+    else:
+        toplevel.wm_state("normal")
 
 
 class EnhancedTextWithLogging(tktextext.EnhancedText):
@@ -874,10 +857,14 @@ class EnhancedTextWithLogging(tktextext.EnhancedText):
         #    chars = try_remove_linenumbers(chars, self)
 
         concrete_index = self.index(index)
-        line_before = self.get(concrete_index + " linestart", concrete_index + " lineend")
+        line_before = self.get(
+            f"{concrete_index} linestart", f"{concrete_index} lineend"
+        )
         self._last_event_changed_line_count = "\n" in chars
         result = tktextext.EnhancedText.direct_insert(self, index, chars, tags=tags, **kw)
-        line_after = self.get(concrete_index + " linestart", concrete_index + " lineend")
+        line_after = self.get(
+            f"{concrete_index} linestart", f"{concrete_index} lineend"
+        )
         trivial_for_coloring, trivial_for_parens = self._is_trivial_edit(
             chars, line_before, line_after
         )
@@ -896,22 +883,20 @@ class EnhancedTextWithLogging(tktextext.EnhancedText):
         try:
             # index1 may be eg "sel.first" and it doesn't make sense *after* deletion
             concrete_index1 = self.index(index1)
-            if index2 is not None:
-                concrete_index2 = self.index(index2)
-            else:
-                concrete_index2 = None
-
+            concrete_index2 = self.index(index2) if index2 is not None else None
             chars = self.get(index1, index2)
             self._last_event_changed_line_count = "\n" in chars
             line_before = self.get(
-                concrete_index1 + " linestart",
-                (concrete_index1 if concrete_index2 is None else concrete_index2) + " lineend",
+                f"{concrete_index1} linestart",
+                (concrete_index1 if concrete_index2 is None else concrete_index2)
+                + " lineend",
             )
             return tktextext.EnhancedText.direct_delete(self, index1, index2=index2, **kw)
         finally:
             line_after = self.get(
-                concrete_index1 + " linestart",
-                (concrete_index1 if concrete_index2 is None else concrete_index2) + " lineend",
+                f"{concrete_index1} linestart",
+                (concrete_index1 if concrete_index2 is None else concrete_index2)
+                + " lineend",
             )
             trivial_for_coloring, trivial_for_parens = self._is_trivial_edit(
                 chars, line_before, line_after
@@ -1140,8 +1125,7 @@ class ThemedListbox(tk.Listbox):
             "highlightcolor",
             "highlightbackground",
         ]:
-            value = style.lookup(self.get_style_name(), key, states)
-            if value:
+            if value := style.lookup(self.get_style_name(), key, states):
                 opts[key] = value
 
         self.configure(opts)
@@ -1344,10 +1328,7 @@ class NoteBox(CommonDialog):
             focus_y += focus[1]
             focus_height = focus[3]
 
-        elif focus is None:
-            pass
-
-        else:
+        elif focus is not None:
             raise TypeError("Unsupported focus")
 
         # Compute dimensions of the note
@@ -1498,23 +1479,15 @@ def alt_is_pressed_without_char(event: tk.Event) -> bool:
 def command_is_pressed(event: tk.Event) -> bool:
     # https://tkdocs.com/shipman/event-handlers.html
     # http://stackoverflow.com/q/32426250/261181
-    if not running_on_mac_os():
-        return False
-    return event.state & 0x0008
+    return event.state & 0x0008 if running_on_mac_os() else False
 
 
 def get_hyperlink_cursor() -> str:
-    if running_on_mac_os():
-        return "pointinghand"
-    else:
-        return "hand2"
+    return "pointinghand" if running_on_mac_os() else "hand2"
 
 
 def get_beam_cursor() -> str:
-    if running_on_mac_os() or running_on_windows():
-        return "ibeam"
-    else:
-        return "xterm"
+    return "ibeam" if running_on_mac_os() or running_on_windows() else "xterm"
 
 
 def sequence_to_event_state_and_keycode(sequence: str) -> Optional[Tuple[int, int]]:
@@ -1588,16 +1561,17 @@ def try_remove_linenumbers(text, master):
 
 def has_line_numbers(text):
     lines = text.splitlines()
-    return len(lines) > 2 and all([len(split_after_line_number(line)) == 2 for line in lines])
+    return len(lines) > 2 and all(
+        len(split_after_line_number(line)) == 2 for line in lines
+    )
 
 
 def split_after_line_number(s):
     parts = re.split(r"(^\s*\d+\.?)", s)
     if len(parts) == 1:
         return parts
-    else:
-        assert len(parts) == 3 and parts[0] == ""
-        return parts[1:]
+    assert len(parts) == 3 and parts[0] == ""
+    return parts[1:]
 
 
 def remove_line_numbers(s):
@@ -1825,10 +1799,7 @@ class ChoiceDialog(CommonDialogEx):
         self.protocol("WM_DELETE_WINDOW", self._cancel)
 
     def _ok(self):
-        self.result = self.var.get()
-        if not self.result:
-            self.result = None
-
+        self.result = self.var.get() or None
         self.destroy()
 
     def _cancel(self):
@@ -1929,10 +1900,7 @@ def get_style_configuration(style_name, default={}):
     # NB! style.configure seems to reuse the returned dict
     # Don't change it without copying first
     result = style.configure(style_name)
-    if result is None:
-        return default
-    else:
-        return result
+    return default if result is None else result
 
 
 def lookup_style_option(style_name, option_name, default=None):
@@ -1970,11 +1938,7 @@ def _get_dialog_provider():
 
     import shutil
 
-    if shutil.which("zenity"):
-        return _ZenityDialogProvider
-
-    # fallback
-    return filedialog
+    return _ZenityDialogProvider if shutil.which("zenity") else filedialog
 
 
 def try_restore_focus_after_file_dialog(dialog_parent):
@@ -2091,10 +2055,7 @@ class _ZenityDialogProvider:
             args.append("--confirm-overwrite")
 
         filename = cls._call(args)
-        if not filename:
-            return None
-
-        return filename
+        return filename or None
 
     @classmethod
     def askdirectory(cls, **options):
@@ -2104,29 +2065,28 @@ class _ZenityDialogProvider:
 
     @classmethod
     def _convert_common_options(cls, default_title, **options):
-        args = ["--file-selection", "--title=%s" % options.get("title", default_title)]
+        args = ["--file-selection", f'--title={options.get("title", default_title)}']
 
-        filename = _options_to_zenity_filename(options)
-        if filename:
-            args.append("--filename=%s" % filename)
+        if filename := _options_to_zenity_filename(options):
+            args.append(f"--filename={filename}")
 
         parent = options.get("parent", options.get("master", None))
         if parent is not None:
             args.append("--modal")
-            args.append("--attach=%s" % hex(parent.winfo_id()))
+            args.append(f"--attach={hex(parent.winfo_id())}")
 
         for desc, pattern in options.get("filetypes", ()):
             # zenity requires star before extension
             pattern = pattern.replace(" .", " *.")
             if pattern.startswith("."):
-                pattern = "*" + pattern
+                pattern = f"*{pattern}"
 
             if pattern == "*.*":
                 # ".*" was provided to make the pattern safe for Tk dialog
                 # not required with Zenity
                 pattern = "*"
 
-            args.append("--file-filter=%s | %s" % (desc, pattern))
+            args.append(f"--file-filter={desc} | {pattern}")
 
         return args
 
@@ -2138,11 +2098,10 @@ class _ZenityDialogProvider:
         )
         if result.returncode == 0:
             return result.stdout.strip()
-        else:
-            logger.warning(
-                "Zenity returned code %r and stderr %r", result.returncode, result.stderr
-            )
-            return None
+        logger.warning(
+            "Zenity returned code %r and stderr %r", result.returncode, result.stderr
+        )
+        return None
 
 
 def _options_to_zenity_filename(options):
@@ -2185,13 +2144,16 @@ def handle_mistreated_latin_shortcuts(registry, event):
         simplified_state |= 0x01
 
     # print(simplified_state, event.keycode)
-    if (simplified_state, event.keycode) in registry:
-        if event.keycode != ord(event.char) and event.keysym in (None, "??"):
-            # keycode and char doesn't match,
-            # this means non-latin keyboard
-            for handler, tester in registry[(simplified_state, event.keycode)]:
-                if tester is None or tester():
-                    handler()
+    if (
+        (simplified_state, event.keycode) in registry
+        and event.keycode != ord(event.char)
+        and event.keysym in (None, "??")
+    ):
+        # keycode and char doesn't match,
+        # this means non-latin keyboard
+        for handler, tester in registry[(simplified_state, event.keycode)]:
+            if tester is None or tester():
+                handler()
 
 
 def show_dialog(dlg, master=None, width=None, height=None, modal=True):
@@ -2209,8 +2171,7 @@ def show_dialog(dlg, master=None, width=None, height=None, modal=True):
     if master.winfo_toplevel().winfo_viewable():
         dlg.transient(master.winfo_toplevel())
 
-    saved_size = get_workbench().get_option(get_size_option_name(dlg))
-    if saved_size:
+    if saved_size := get_workbench().get_option(get_size_option_name(dlg)):
         width = min(max(saved_size[0], ems_to_pixels(10)), ems_to_pixels(500))
         height = min(max(saved_size[1], ems_to_pixels(8)), ems_to_pixels(300))
 
@@ -2315,8 +2276,7 @@ class MenuEx(tk.Menu):
         super().add(itemType, cnf)
 
         itemdata = self.entryconfigure(self.index("end"))
-        labeldata = itemdata.get("label")
-        if labeldata:
+        if labeldata := itemdata.get("label"):
             self._testers[labeldata] = tester
 
 
@@ -2387,14 +2347,11 @@ def create_action_label(master, text, click_handler, **kw):
 
 
 def get_size_option_name(window):
-    return "layout." + type(window).__name__ + "_size"
+    return f"layout.{type(window).__name__}_size"
 
 
 def get_default_basic_theme():
-    if running_on_windows():
-        return "vista"
-    else:
-        return "clam"
+    return "vista" if running_on_windows() else "clam"
 
 
 EM_WIDTH = None

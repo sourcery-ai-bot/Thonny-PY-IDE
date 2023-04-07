@@ -86,7 +86,7 @@ class FirstRunWindow(tk.Tk):
         top = max(int(screen_height / 2 - height / 2), 0)
 
         # Positions the window in the center of the page.
-        self.geometry("+{}+{}".format(left, top))
+        self.geometry(f"+{left}+{top}")
 
     def on_ok(self):
         if self.mode_variable.get() == RPI_MODE_TEXT:

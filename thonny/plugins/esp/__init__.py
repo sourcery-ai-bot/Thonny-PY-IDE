@@ -29,7 +29,7 @@ VIDS_PIDS_TO_AVOID_IN_ESP_BACKENDS = set()
 
 class ESPProxy(BareMetalMicroPythonProxy):
     @classmethod
-    def get_vids_pids_to_avoid(self):
+    def get_vids_pids_to_avoid(cls):
         return VIDS_PIDS_TO_AVOID_IN_ESP_BACKENDS
 
     def _get_backend_launcher_path(self) -> str:
@@ -86,15 +86,10 @@ class ESPConfigPage(BareMetalMicroPythonConfigPage):
         except ImportError:
             import shutil
 
-            result = shutil.which("esptool")
-            if result:
+            if result := shutil.which("esptool"):
                 return [result]
             else:
-                result = shutil.which("esptool.py")
-                if result:
-                    return [result]
-                else:
-                    return None
+                return [result] if (result := shutil.which("esptool.py")) else None
 
     @property
     def allow_webrepl(self):
@@ -121,7 +116,7 @@ class ESPFlashingDialog(WorkDialog):
         self._esptool_command = esptool_command
 
     def get_title(self):
-        return "%s firmware installer" % self._chip.upper()
+        return f"{self._chip.upper()} firmware installer"
 
     def get_instructions(self) -> Optional[str]:
         return (
@@ -220,12 +215,11 @@ class ESPFlashingDialog(WorkDialog):
         if not os.path.isdir(initialdir):
             initialdir = None
 
-        path = ui_utils.askopenfilename(
+        if path := ui_utils.askopenfilename(
             filetypes=[("bin-files", ".bin"), ("all files", ".*")],
             parent=self.winfo_toplevel(),
             initialdir=initialdir,
-        )
-        if path:
+        ):
             self._firmware_entry.delete(0, "end")
             self._firmware_entry.insert(0, path)
 
@@ -364,7 +358,9 @@ class ESPFlashingDialog(WorkDialog):
                     # now let's be more concrete
                     self._proc.kill()
         except OSError as e:
-            messagebox.showerror("Error", "Could not kill subprocess: " + str(e), master=self)
+            messagebox.showerror(
+                "Error", f"Could not kill subprocess: {str(e)}", master=self
+            )
             logger.error("Could not kill subprocess", exc_info=e)
 
 

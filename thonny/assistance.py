@@ -233,13 +233,21 @@ class AssistantView(tktextext.TextFrame):
 
     def _format_suggestion(self, suggestion, last, initially_open):
         return (
-            # assuming that title is already in rst format
-            ".. topic:: "
-            + suggestion.title
-            + "\n"
-            + "    :class: toggle%s%s\n"
-            % (", open" if initially_open else "", ", tight" if not last else "")
-            + "    \n"
+            (
+                (
+                    ".. topic:: "
+                    + suggestion.title
+                    + "\n"
+                    + (
+                        "    :class: toggle%s%s\n"
+                        % (
+                            ", open" if initially_open else "",
+                            "" if last else ", tight",
+                        )
+                    )
+                )
+                + "    \n"
+            )
             + textwrap.indent(suggestion.body, "    ")
             + "\n\n"
         )
@@ -286,22 +294,25 @@ class AssistantView(tktextext.TextFrame):
             self._present_conclusion()
 
     def _present_conclusion(self):
-        if not self.text.get("1.0", "end").strip():
-            if self.main_file_path is not None and os.path.exists(self.main_file_path):
-                self._append_text("\n")
-                self.text.append_rst(
-                    "The code in `%s <%s>`__ looks good.\n\n"
-                    % (
-                        os.path.basename(self.main_file_path),
-                        self._format_file_url({"filename": self.main_file_path}),
-                    )
+        if (
+            not self.text.get("1.0", "end").strip()
+            and self.main_file_path is not None
+            and os.path.exists(self.main_file_path)
+        ):
+            self._append_text("\n")
+            self.text.append_rst(
+                "The code in `%s <%s>`__ looks good.\n\n"
+                % (
+                    os.path.basename(self.main_file_path),
+                    self._format_file_url({"filename": self.main_file_path}),
                 )
-                self.text.append_rst(
-                    "If it is not working as it should, "
-                    + "then consider using some general "
-                    + "`debugging techniques <debugging.rst>`__.\n\n",
-                    ("em",),
-                )
+            )
+            self.text.append_rst(
+                "If it is not working as it should, "
+                + "then consider using some general "
+                + "`debugging techniques <debugging.rst>`__.\n\n",
+                ("em",),
+            )
 
         if self.text.get("1.0", "end").strip():
             self._append_feedback_link()
@@ -554,18 +565,30 @@ class FeedbackDialog(CommonDialog):
 
         intro_label = ttk.Label(
             main_frame,
-            text="Below are the messages Assistant gave you in response to "
-            + (
-                "using the shell"
-                if self._happened_in_shell()
-                else "testing '" + os.path.basename(main_file_path) + "'"
-            )
-            + " since "
-            + self._get_since_str()
-            + ".\n\n"
-            + "In order to improve this feature, Thonny developers would love to know how "
-            + "useful or confusing these messages were. We will only collect version "
-            + "information and the data you enter or approve on this form.",
+            text=(
+                (
+                    (
+                        (
+                            (
+                                (
+                                    "Below are the messages Assistant gave you in response to "
+                                    + (
+                                        "using the shell"
+                                        if self._happened_in_shell()
+                                        else f"testing '{os.path.basename(main_file_path)}'"
+                                    )
+                                )
+                                + " since "
+                            )
+                            + self._get_since_str()
+                            + ".\n\n"
+                        )
+                        + "In order to improve this feature, Thonny developers would love to know how "
+                    )
+                    + "useful or confusing these messages were. We will only collect version "
+                )
+                + "information and the data you enter or approve on this form."
+            ),
             wraplength=550,
         )
         intro_label.grid(row=1, column=0, columnspan=3, sticky="nw", padx=padx, pady=(15, 15))
@@ -881,20 +904,12 @@ def name_similarity(a, b):
     minlen = min(len(a), len(b))
 
     if a.replace("0", "O").replace("1", "l") == b.replace("0", "O").replace("1", "l"):
-        if minlen >= 4:
-            return 7
-        else:
-            return 6
-
+        return 7 if minlen >= 4 else 6
     a = a.lower()
     b = b.lower()
 
     if a == b:
-        if minlen >= 4:
-            return 7
-        else:
-            return 6
-
+        return 7 if minlen >= 4 else 6
     if minlen <= 2:
         return 0
 
@@ -963,9 +978,9 @@ def add_error_helper(error_type_name, helper_class):
 def format_file_url(filename, lineno, col_offset):
     s = "thonny-editor://" + rst_utils.escape(filename).replace(" ", "%20")
     if lineno is not None:
-        s += "#" + str(lineno)
+        s += f"#{str(lineno)}"
         if col_offset is not None:
-            s += ":" + str(col_offset)
+            s += f":{str(col_offset)}"
 
     return s
 

@@ -43,11 +43,10 @@ class MicroPythonProxy(SubprocessProxy):
             if path.startswith("/home/"):
                 return path
 
-        for path in ["/lib", "/flash/lib"]:
-            if path in lib_dirs:
-                return path
-
-        return lib_dirs[0]
+        return next(
+            (path for path in ["/lib", "/flash/lib"] if path in lib_dirs),
+            lib_dirs[0],
+        )
 
     def get_lib_dirs(self):
         return self._lib_dirs
@@ -58,14 +57,17 @@ class MicroPythonProxy(SubprocessProxy):
             self._lib_dirs = msg["lib_dirs"]
 
     def _get_time_args(self):
-        result = {
-            "sync_time": get_workbench().get_option(self.backend_name + ".sync_time", False),
-            "validate_time": get_workbench().get_option(
-                self.backend_name + ".validate_time", False
+        return {
+            "sync_time": get_workbench().get_option(
+                f"{self.backend_name}.sync_time", False
             ),
-            "local_rtc": get_workbench().get_option(self.backend_name + ".local_rtc", False),
+            "validate_time": get_workbench().get_option(
+                f"{self.backend_name}.validate_time", False
+            ),
+            "local_rtc": get_workbench().get_option(
+                f"{self.backend_name}.local_rtc", False
+            ),
         }
-        return result
 
     def _installer_runs_locally(self):
         return True
@@ -86,7 +88,7 @@ class MicroPythonProxy(SubprocessProxy):
 
 class BareMetalMicroPythonProxy(MicroPythonProxy):
     def __init__(self, clean):
-        self._port = get_workbench().get_option(self.backend_name + ".port")
+        self._port = get_workbench().get_option(f"{self.backend_name}.port")
         self._clean_start = clean
         self._fix_port()
 
@@ -140,31 +142,35 @@ class BareMetalMicroPythonProxy(MicroPythonProxy):
         args = {
             "clean": self._clean_start,
             "port": self._port,
-            "dtr": get_workbench().get_option(self.backend_name + ".dtr"),
-            "rts": get_workbench().get_option(self.backend_name + ".rts"),
-            "submit_mode": get_workbench().get_option(self.backend_name + ".submit_mode"),
+            "dtr": get_workbench().get_option(f"{self.backend_name}.dtr"),
+            "rts": get_workbench().get_option(f"{self.backend_name}.rts"),
+            "submit_mode": get_workbench().get_option(
+                f"{self.backend_name}.submit_mode"
+            ),
             "interrupt_on_connect": get_workbench().get_option(
-                self.backend_name + ".interrupt_on_connect"
+                f"{self.backend_name}.interrupt_on_connect"
             ),
             "write_block_size": self._get_write_block_size(),
             "write_block_delay": self._get_write_block_delay(),
             "proxy_class": self.__class__.__name__,
         }
         if self._port == WEBREPL_PORT_VALUE:
-            args["url"] = get_workbench().get_option(self.backend_name + ".webrepl_url")
-            args["password"] = get_workbench().get_option(self.backend_name + ".webrepl_password")
+            args["url"] = get_workbench().get_option(f"{self.backend_name}.webrepl_url")
+            args["password"] = get_workbench().get_option(
+                f"{self.backend_name}.webrepl_password"
+            )
 
-        args.update(self._get_time_args())
+        args |= self._get_time_args()
 
-        cmd = [
+        return [
             self._get_backend_launcher_path(),
             repr(args),
         ]
 
-        return cmd
-
     def should_restart_interpreter_before_run(self):
-        return get_workbench().get_option(self.backend_name + ".restart_interpreter_before_run")
+        return get_workbench().get_option(
+            f"{self.backend_name}.restart_interpreter_before_run"
+        )
 
     def stop_restart_kills_user_program(self) -> bool:
         return False
@@ -175,10 +181,10 @@ class BareMetalMicroPythonProxy(MicroPythonProxy):
         return thonny.plugins.micropython.bare_metal_backend.__file__
 
     def _get_write_block_size(self):
-        return get_workbench().get_option(self.backend_name + ".write_block_size")
+        return get_workbench().get_option(f"{self.backend_name}.write_block_size")
 
     def _get_write_block_delay(self):
-        return get_workbench().get_option(self.backend_name + ".write_block_delay")
+        return get_workbench().get_option(f"{self.backend_name}.write_block_delay")
 
     def interrupt(self):
         # Don't interrupt local process, but direct it to device
@@ -308,9 +314,9 @@ class BareMetalMicroPythonProxy(MicroPythonProxy):
 
     def get_full_label(self):
         if self.is_connected():
-            return self.get_node_label() + " @ " + self._port
+            return f"{self.get_node_label()} @ {self._port}"
         else:
-            return self.get_node_label() + " (" + tr("Not connected") + ")"
+            return f"{self.get_node_label()} (" + tr("Not connected") + ")"
 
     def get_exe_dirs(self):
         return []
@@ -351,11 +357,10 @@ class BareMetalMicroPythonProxy(MicroPythonProxy):
     @classmethod
     def get_switcher_configuration_label(cls, conf: Dict[str, Any]) -> str:
         port = conf[f"{cls.backend_name}.port"]
-        if port == WEBREPL_PORT_VALUE:
-            url = conf[f"{cls.backend_name}.webrepl_url"]
-            return f"{cls.backend_description}  •  {url}"
-        else:
+        if port != WEBREPL_PORT_VALUE:
             return f"{cls.backend_description}  •  {port}"
+        url = conf[f"{cls.backend_name}.webrepl_url"]
+        return f"{cls.backend_description}  •  {url}"
 
     @classmethod
     def get_switcher_entries(cls):
@@ -448,7 +453,7 @@ class BareMetalMicroPythonConfigPage(BackendDetailsConfigPage):
         self._ports_by_desc = {
             p.description
             if p.device in p.description
-            else p.description + " (" + p.device + ")": p.device
+            else f"{p.description} ({p.device})": p.device
             for p in list_serial_ports()
         }
         self._ports_by_desc["< " + tr("Try to detect port automatically") + " >"] = "auto"
@@ -487,7 +492,7 @@ class BareMetalMicroPythonConfigPage(BackendDetailsConfigPage):
         self._webrepl_frame = None
 
         self.add_checkbox(
-            self.backend_name + ".interrupt_on_connect",
+            f"{self.backend_name}.interrupt_on_connect",
             row=10,
             description=tr("Interrupt working program on connect"),
             pady=(ems_to_pixels(2.0), 0),
@@ -495,19 +500,19 @@ class BareMetalMicroPythonConfigPage(BackendDetailsConfigPage):
 
         if self.may_have_rtc():
             self.add_checkbox(
-                self.backend_name + ".sync_time",
+                f"{self.backend_name}.sync_time",
                 row=11,
                 description=tr("Synchronize device's real time clock"),
             )
 
             self.add_checkbox(
-                self.backend_name + ".local_rtc",
+                f"{self.backend_name}.local_rtc",
                 row=12,
                 description=tr("Use local time in real time clock"),
             )
 
         self.add_checkbox(
-            self.backend_name + ".restart_interpreter_before_run",
+            f"{self.backend_name}.restart_interpreter_before_run",
             row=13,
             description=tr("Restart interpreter before running a script"),
         )
@@ -575,15 +580,17 @@ class BareMetalMicroPythonConfigPage(BackendDetailsConfigPage):
         self._webrepl_frame = ttk.Frame(self)
 
         self._webrepl_url_var = create_string_var(
-            get_workbench().get_option(self.backend_name + ".webrepl_url")
+            get_workbench().get_option(f"{self.backend_name}.webrepl_url")
         )
-        url_label = ttk.Label(self._webrepl_frame, text="URL (eg. %s)" % DEFAULT_WEBREPL_URL)
+        url_label = ttk.Label(
+            self._webrepl_frame, text=f"URL (eg. {DEFAULT_WEBREPL_URL})"
+        )
         url_label.grid(row=0, column=0, sticky="nw", pady=(10, 0))
         url_entry = ttk.Entry(self._webrepl_frame, textvariable=self._webrepl_url_var, width=30)
         url_entry.grid(row=1, column=0, sticky="nw")
 
         self._webrepl_password_var = create_string_var(
-            get_workbench().get_option(self.backend_name + ".webrepl_password")
+            get_workbench().get_option(f"{self.backend_name}.webrepl_password")
         )
         pw_label = ttk.Label(self._webrepl_frame, text=tr("Password"))
         pw_label.grid(row=0, column=1, sticky="nw", pady=(10, 0), padx=(10, 0))
@@ -593,18 +600,19 @@ class BareMetalMicroPythonConfigPage(BackendDetailsConfigPage):
         return self._webrepl_frame
 
     def get_stored_port_desc(self):
-        name = get_workbench().get_option(self.backend_name + ".port")
-        for desc in self._ports_by_desc:
-            if self._ports_by_desc[desc] == name:
-                return desc
-
-        return ""
+        name = get_workbench().get_option(f"{self.backend_name}.port")
+        return next(
+            (
+                desc
+                for desc in self._ports_by_desc
+                if self._ports_by_desc[desc] == name
+            ),
+            "",
+        )
 
     def get_selected_port_name(self):
         port_desc = self._port_desc_variable.get()
-        if not port_desc:
-            return None
-        return self._ports_by_desc[port_desc]
+        return self._ports_by_desc[port_desc] if port_desc else None
 
     def is_modified(self):
         return (
@@ -625,23 +633,22 @@ class BareMetalMicroPythonConfigPage(BackendDetailsConfigPage):
         if not self.is_modified():
             return
 
-        else:
-            port_name = self.get_selected_port_name()
-            get_workbench().set_option(self.backend_name + ".port", port_name)
-            if self.webrepl_selected():
-                get_workbench().set_option(
-                    self.backend_name + ".webrepl_url", self._webrepl_url_var.get()
-                )
-                get_workbench().set_option(
-                    self.backend_name + ".webrepl_password", self._webrepl_password_var.get()
-                )
+        port_name = self.get_selected_port_name()
+        get_workbench().set_option(f"{self.backend_name}.port", port_name)
+        if self.webrepl_selected():
+            get_workbench().set_option(
+                f"{self.backend_name}.webrepl_url", self._webrepl_url_var.get()
+            )
+            get_workbench().set_option(
+                f"{self.backend_name}.webrepl_password",
+                self._webrepl_password_var.get(),
+            )
 
     def _on_change_port(self, *args):
         if self._port_desc_variable.get() == self._WEBREPL_OPTION_DESC:
             self._get_webrepl_frame().grid(row=6, column=0, sticky="nwe")
-        else:
-            if self._webrepl_frame and self._webrepl_frame.winfo_ismapped():
-                self._webrepl_frame.grid_forget()
+        elif self._webrepl_frame and self._webrepl_frame.winfo_ismapped():
+            self._webrepl_frame.grid_forget()
 
     def may_have_rtc(self):
         return True
@@ -672,7 +679,7 @@ class GenericBareMetalMicroPythonProxy(BareMetalMicroPythonProxy):
         } | get_uart_adapter_vids_pids()
 
     @classmethod
-    def get_vids_pids_to_avoid(self):
+    def get_vids_pids_to_avoid(cls):
         return VIDS_PIDS_TO_AVOID_IN_GENERIC_BACKEND
 
 
@@ -685,11 +692,7 @@ class GenericBareMetalMicroPythonConfigPage(BareMetalMicroPythonConfigPage):
 class LocalMicroPythonProxy(MicroPythonProxy):
     def __init__(self, clean):
         exe = get_workbench().get_option("LocalMicroPython.executable")
-        if os.path.isabs(exe):
-            self._target_executable = exe
-        else:
-            self._target_executable = shutil.which(exe)
-
+        self._target_executable = exe if os.path.isabs(exe) else shutil.which(exe)
         super().__init__(clean)
 
     def get_target_executable(self) -> Optional[str]:
@@ -698,7 +701,7 @@ class LocalMicroPythonProxy(MicroPythonProxy):
     def _get_launcher_with_args(self):
         import thonny.plugins.micropython.os_mp_backend
 
-        cmd = [
+        return [
             thonny.plugins.micropython.os_mp_backend.__file__,
             repr(
                 {
@@ -707,7 +710,6 @@ class LocalMicroPythonProxy(MicroPythonProxy):
                 }
             ),
         ]
-        return cmd
 
     def interrupt(self):
         # Don't interrupt local process, but direct it to the device
@@ -787,7 +789,7 @@ class LocalMicroPythonProxy(MicroPythonProxy):
 
     @classmethod
     def get_switcher_configuration_label(cls, conf: Dict[str, Any]) -> str:
-        return cls.backend_description + "  •  " + conf[f"{cls.backend_name}.executable"]
+        return f'{cls.backend_description}  •  {conf[f"{cls.backend_name}.executable"]}'
 
     @classmethod
     def is_valid_configuration(cls, conf: Dict[str, Any]) -> bool:
@@ -834,14 +836,13 @@ class SshMicroPythonProxy(MicroPythonProxy):
             "user": self._user,
         }
 
-        args.update(self._get_time_args())
+        args |= self._get_time_args()
         args.update(self._get_extra_launcher_args())
 
-        cmd = [
+        return [
             thonny.plugins.micropython.os_mp_backend.__file__,
             repr(args),
         ]
-        return cmd
 
     def _send_initial_input(self) -> None:
         assert self._proc is not None
@@ -900,7 +901,7 @@ class SshMicroPythonProxy(MicroPythonProxy):
         return self._host
 
     def get_full_label(self):
-        return self._target_executable + " @ " + self._host
+        return f"{self._target_executable} @ {self._host}"
 
     def get_exe_dirs(self):
         return []
@@ -945,7 +946,7 @@ class SshMicroPythonProxy(MicroPythonProxy):
 
         from thonny import terminal
 
-        userhost = "%s@%s" % (self._user, self._host)
+        userhost = f"{self._user}@{self._host}"
         terminal.run_in_terminal(
             ["ssh", userhost], cwd=get_workbench().get_local_cwd(), keep_open=False, title=userhost
         )
@@ -993,11 +994,7 @@ def list_serial_port_infos():
 
 
 def port_exists(device):
-    for port in list_serial_ports():
-        if port.device == device:
-            return True
-
-    return False
+    return any(port.device == device for port in list_serial_ports())
 
 
 def list_serial_ports_with_descriptions():
@@ -1015,7 +1012,9 @@ def list_serial_ports_with_descriptions():
 
     return [
         (
-            p.description if p.device in p.description else p.description + " (" + p.device + ")",
+            p.description
+            if p.device in p.description
+            else f"{p.description} ({p.device})",
             p.device,
         )
         for p in sorted_ports
@@ -1046,7 +1045,7 @@ def get_port_info(port):
     for info in list_serial_ports():
         if info.device == port:
             return info
-    raise RuntimeError("Port %s not found" % port)
+    raise RuntimeError(f"Port {port} not found")
 
 
 def add_micropython_backend(
@@ -1066,24 +1065,23 @@ def add_micropython_backend(
     rts=None,
 ):
     if bare_metal:
-        get_workbench().set_default(name + ".port", "auto")
-        get_workbench().set_default(name + ".webrepl_url", DEFAULT_WEBREPL_URL)
-        get_workbench().set_default(name + ".webrepl_password", "")
-        get_workbench().set_default(name + ".submit_mode", submit_mode)
-        get_workbench().set_default(name + ".write_block_size", write_block_size)
-        get_workbench().set_default(name + ".write_block_delay", write_block_delay)
-        get_workbench().set_default(name + ".dtr", dtr)
-        get_workbench().set_default(name + ".rts", rts)
-        get_workbench().set_default(name + ".interrupt_on_connect", True)
-        get_workbench().set_default(name + ".restart_interpreter_before_run", True)
+        get_workbench().set_default(f"{name}.port", "auto")
+        get_workbench().set_default(f"{name}.webrepl_url", DEFAULT_WEBREPL_URL)
+        get_workbench().set_default(f"{name}.webrepl_password", "")
+        get_workbench().set_default(f"{name}.submit_mode", submit_mode)
+        get_workbench().set_default(f"{name}.write_block_size", write_block_size)
+        get_workbench().set_default(f"{name}.write_block_delay", write_block_delay)
+        get_workbench().set_default(f"{name}.dtr", dtr)
+        get_workbench().set_default(f"{name}.rts", rts)
+        get_workbench().set_default(f"{name}.interrupt_on_connect", True)
+        get_workbench().set_default(f"{name}.restart_interpreter_before_run", True)
 
         if sync_time is None:
             sync_time = True
-    else:
-        if sync_time is None:
-            sync_time = False
+    elif sync_time is None:
+        sync_time = False
 
-    get_workbench().set_default(name + ".sync_time", sync_time)
-    get_workbench().set_default(name + ".local_rtc", local_rtc)
-    get_workbench().set_default(name + ".validate_time", validate_time)
+    get_workbench().set_default(f"{name}.sync_time", sync_time)
+    get_workbench().set_default(f"{name}.local_rtc", local_rtc)
+    get_workbench().set_default(f"{name}.validate_time", validate_time)
     get_workbench().add_backend(name, proxy_class, description, config_page, sort_key=sort_key)

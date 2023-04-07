@@ -101,7 +101,7 @@ class CompletionsBox(EditorInfoBox):
         )
 
         # present
-        if len(completions) == 0:
+        if not completions:
             self.hide()
             return
 
@@ -137,10 +137,7 @@ class CompletionsBox(EditorInfoBox):
 
     def _get_current_completion_index(self):
         selected = self._listbox.curselection()
-        if len(selected) == 0:
-            return 0
-        else:
-            return selected[0]
+        return 0 if len(selected) == 0 else selected[0]
 
     def _move_selection(self, delta):
         old_flag = self._tweaking_listbox_selection
@@ -222,10 +219,7 @@ class CompletionsBox(EditorInfoBox):
 
     def _get_current_completion(self) -> Optional[CompletionInfo]:
         sel = self._listbox.curselection()
-        if len(sel) != 1:
-            return None
-
-        return self._completions[sel[0]]
+        return None if len(sel) != 1 else self._completions[sel[0]]
 
     def _insert_completion(self, completion: CompletionInfo, replace_suffix: bool) -> None:
         prefix_start_index = f"insert-{completion.prefix_length}c"
@@ -298,8 +292,7 @@ class CompletionsBox(EditorInfoBox):
         if not self.is_visible():
             return
 
-        error = getattr(msg, "error", None)
-        if error:
+        if error := getattr(msg, "error", None):
             messagebox.showerror(tr("Error"), str(error), master=get_workbench())
             return
 
@@ -368,8 +361,7 @@ class Completer:
             self._completions_box.request_details()
             return
 
-        text = editor_helpers.get_active_text_widget()
-        if text:
+        if text := editor_helpers.get_active_text_widget():
             self.request_completions_for_text(text)
         else:
             get_workbench().bell()
@@ -381,17 +373,10 @@ class Completer:
 
         # Don't autocomplete inside comments
         line_prefix = event.widget.get("insert linestart", "insert")
-        if "#" in line_prefix:
-            # not very precise (eg. when inside a string), but good enough
-            return False
-
-        return True
+        return "#" not in line_prefix
 
     def _box_is_visible(self):
-        if not self._completions_box:
-            return False
-
-        return self._completions_box.is_visible()
+        return self._completions_box.is_visible() if self._completions_box else False
 
     def _close_box(self):
         if self._completions_box:
@@ -446,10 +431,7 @@ class Completer:
 
         text = cast(tk.Text, event.widget)
         preceding = text.get("insert -2 chars")
-        if preceding.isnumeric():
-            return False
-
-        return True
+        return not preceding.isnumeric()
 
     def request_completions_for_text(self, text: SyntaxText) -> None:
         source, row, column = editor_helpers.get_relevant_source_and_cursor_position(text)
@@ -498,12 +480,11 @@ class Completer:
                 option_name = "edit.tab_request_completions_in_editors"
 
             if get_workbench().get_option(option_name):
-                if not text.has_selection():
-                    self.request_completions_for_text(text)
-                    return "break"
-                else:
+                if text.has_selection():
                     return None
 
+                self.request_completions_for_text(text)
+                return "break"
         return text.perform_dumb_tab(event)
 
 

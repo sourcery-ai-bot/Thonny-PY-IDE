@@ -113,10 +113,7 @@ class WebReplConnection(MicroPythonConnection):
         while True:
             while not self._write_queue.empty():
                 data = self._write_queue.get(block=False)
-                if self.text_mode:
-                    payload = data.decode("UTF-8")
-                else:
-                    payload = data
+                payload = data.decode("UTF-8") if self.text_mode else data
                 await self._ws.send(payload)
                 # logger.debug("Wrote %r bytes", len(data))
                 self._write_responses.put(len(data))

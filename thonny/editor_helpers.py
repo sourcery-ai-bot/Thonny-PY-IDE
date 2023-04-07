@@ -70,7 +70,7 @@ class EditorInfoBox(tk.Toplevel):
         # Need to know about certain keypresses while the completer is active
         # Other plugins (eg. auto indenter) may eat up returns, therefore I need to
         # raise the priority of this binding
-        tag = tag_prefix + "_" + str(text.winfo_id())
+        tag = f"{tag_prefix}_{str(text.winfo_id())}"
         text.bindtags((tag,) + text.bindtags())
         text.bind_class(tag, "<Key>", self._on_text_keypress, True)
 
@@ -279,11 +279,7 @@ class DocuBoxBase(EditorInfoBox):
             self._append_chars(sig.return_type, ["annotation"])
 
     def render_parameter(self, param: SignatureParameter, active: bool) -> None:
-        if active:
-            base_tags = ["active"]
-        else:
-            base_tags = []
-
+        base_tags = ["active"] if active else []
         if param.kind == "VAR_POSITIONAL":
             self._append_chars("*", base_tags)
         elif param.kind == "VAR_KEYWORD":
@@ -295,7 +291,7 @@ class DocuBoxBase(EditorInfoBox):
             self._append_chars(":\u00A0" + param.annotation, base_tags + ["annotation"])
 
         if param.default:
-            self._append_chars("=" + param.default, base_tags + ["default"])
+            self._append_chars(f"={param.default}", base_tags + ["default"])
 
     def format_signature(self, s: str) -> str:
         s = s.replace(": ", ":\u00A0")
@@ -313,9 +309,7 @@ class DocuBoxBase(EditorInfoBox):
                 .replace("\n  /\n)", " /\n)")
                 .replace("\n  *\n)", " *\n)")
             )
-            return s
-        else:
-            return s
+        return s
 
 
 class DocuBox(DocuBoxBase):
@@ -339,10 +333,7 @@ class DocuBox(DocuBoxBase):
 
 def get_active_text_widget() -> Optional[SyntaxText]:
     widget = get_workbench().focus_get()
-    if isinstance(widget, (CodeViewText, ShellText)):
-        return widget
-
-    return None
+    return widget if isinstance(widget, (CodeViewText, ShellText)) else None
 
 
 def get_cursor_position(text: SyntaxText) -> Tuple[int, int]:
@@ -365,10 +356,7 @@ def get_relevant_source_and_cursor_position(text: SyntaxText) -> Tuple[str, int,
     if isinstance(text, ShellText):
         source = text.get("input_start", "insert")
         lines = source.splitlines()
-        if not lines:
-            return source, 1, 0
-        else:
-            return source, len(lines), len(lines[-1])
+        return (source, len(lines), len(lines[-1])) if lines else (source, 1, 0)
     else:
         row, col = get_cursor_position(text)
         return text.get("1.0", "end-1c"), row, col

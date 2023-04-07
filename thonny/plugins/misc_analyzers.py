@@ -240,7 +240,7 @@ class ProgramNamingAnalyzer(ProgramAnalyzer):
             full_path = os.path.join(main_file_dir, item)
             if item.endswith(".py") and item[:-3] in library_modules:
                 if is_same_path(full_path, main_file_path):
-                    prelude = "Your program file is named '%s'." % item
+                    prelude = f"Your program file is named '{item}'."
                     rename_hint = " (*File → Rename…* )"
                 else:
                     prelude = (
@@ -254,12 +254,13 @@ class ProgramNamingAnalyzer(ProgramAnalyzer):
                     "lineno": 0,
                     "symbol": "file-shadows-library-module",
                     "msg": "Possibly bad file name",
-                    "explanation_rst": prelude
-                    + "\n\n"
-                    + "When you try to import library module ``%s``, your file will be imported instead.\n\n"
-                    % item[:-3]
-                    + "Rename your '%s'%s to make the library module visible again."
-                    % (item, rename_hint),
+                    "explanation_rst": (
+                        prelude
+                        + "\n\n"
+                        + "When you try to import library module ``%s``, your file will be imported instead.\n\n"
+                        % item[:-3]
+                        + f"Rename your '{item}'{rename_hint} to make the library module visible again."
+                    ),
                     "group": "warnings",
                     "relevance": 5,
                 }
@@ -288,11 +289,11 @@ class ProgramNamingAnalyzer(ProgramAnalyzer):
         return module_names
 
     def _get_module_names(self, dir_path):
-        result = set()
-        for name in os.listdir(dir_path):
-            if "-" not in name:
-                result.add(name.replace(".py", ""))
-        return result
+        return {
+            name.replace(".py", "")
+            for name in os.listdir(dir_path)
+            if "-" not in name
+        }
 
 
 def load_plugin():

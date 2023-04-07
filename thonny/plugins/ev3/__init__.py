@@ -51,14 +51,13 @@ class EV3MicroPythonProxy(SshMicroPythonProxy):
             "user": self._user,
         }
 
-        args.update(self._get_time_args())
+        args |= self._get_time_args()
         args.update(self._get_extra_launcher_args())
 
-        cmd = [
+        return [
             thonny.plugins.ev3.ev3_back.__file__,
             repr(args),
         ]
-        return cmd
 
     def _get_extra_launcher_args(self):
         return {"interpreter_launcher": ["brickrun", "-r", "--"]}

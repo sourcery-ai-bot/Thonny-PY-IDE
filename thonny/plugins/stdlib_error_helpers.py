@@ -25,10 +25,9 @@ class SyntaxErrorHelper(ErrorHelper):
 
         if self.error_info["message"] == "EOL while scanning string literal":
             self.intro_text = (
-                "You haven't properly closed the string on line %s." % self.error_info["lineno"]
+                f"""You haven't properly closed the string on line {self.error_info["lineno"]}."""
                 + "\n(If you want a multi-line string, then surround it with"
-                + " `'''` or `\"\"\"` at both ends.)"
-            )
+            ) + " `'''` or `\"\"\"` at both ends.)"
 
         elif self.error_info["message"] == "EOF while scanning triple-quoted string literal":
             # lineno is not useful, as it is at the end of the file and user probably
@@ -39,8 +38,7 @@ class SyntaxErrorHelper(ErrorHelper):
             if self.error_info["filename"] and os.path.isfile(self.error_info["filename"]):
                 with open(self.error_info["filename"], mode="rb") as fp:
                     try:
-                        for t in tokenize.tokenize(fp.readline):
-                            self.tokens.append(t)
+                        self.tokens.extend(iter(tokenize.tokenize(fp.readline)))
                     except tokenize.TokenError as e:
                         self.token_error = e
                     except IndentationError as e:
@@ -54,8 +52,7 @@ class SyntaxErrorHelper(ErrorHelper):
             else:
                 self.tokens = []
 
-            unbalanced = self._sug_unbalanced_parens()
-            if unbalanced:
+            if unbalanced := self._sug_unbalanced_parens():
                 self.intro_text = (
                     "Unbalanced parentheses, brackets or braces:\n\n" + unbalanced.body
                 )
@@ -104,9 +101,9 @@ class SyntaxErrorHelper(ErrorHelper):
                     ]
                     and self.tokens[i].string != ":"
                 ):
-                    old_i = i
                     if self.tokens[i].string in "([{":
                         i = self._skip_braced_part(i)
+                        old_i = i
                         assert i > old_i
                         if i == len(self.tokens):
                             return None
@@ -115,7 +112,7 @@ class SyntaxErrorHelper(ErrorHelper):
 
                 if self.tokens[i].string != ":":
                     relevance = 9
-                    body = "`%s` header must end with a colon." % t.string
+                    body = f"`{t.string}` header must end with a colon."
                     break
 
                 # Colon was present, but maybe it should have been right
@@ -124,8 +121,8 @@ class SyntaxErrorHelper(ErrorHelper):
                     t.string in ["else", "try", "finally"]
                     and self.tokens[keyword_pos + 1].string != ":"
                 ):
-                    title = "Incorrect use of `%s`" % t.string
-                    body = "Nothing is allowed between `%s` and colon." % t.string
+                    title = f"Incorrect use of `{t.string}`"
+                    body = f"Nothing is allowed between `{t.string}` and colon."
                     relevance = 9
                     if (
                         self.tokens[keyword_pos + 1].type not in (token.NEWLINE, tokenize.COMMENT)
@@ -140,10 +137,13 @@ class SyntaxErrorHelper(ErrorHelper):
 
     def _sug_unbalanced_parens(self):
         problem = self._find_first_braces_problem()
-        if not problem:
-            return None
-
-        return Suggestion("missing-or-misplaced-colon", "Unbalanced brackets", problem[1], 8)
+        return (
+            Suggestion(
+                "missing-or-misplaced-colon", "Unbalanced brackets", problem[1], 8
+            )
+            if problem
+            else None
+        )
 
     def _sug_wrong_increment_op(self):
         pass
@@ -245,7 +245,7 @@ class NameErrorHelper(ErrorHelper):
         assert len(names) == 1
         self.name = names[0].strip("'")
 
-        self.intro_text = "Python doesn't know what `%s` stands for." % self.name
+        self.intro_text = f"Python doesn't know what `{self.name}` stands for."
         self.suggestions = [
             self._sug_bad_spelling(),
             self._sug_missing_quotes(),
@@ -359,10 +359,7 @@ class NameErrorHelper(ErrorHelper):
 
         elif self._is_attribute_value():
             relevance = 5
-            body = (
-                "If you meant module `%s`, then add `import %s` to the beginning of your script"
-                % (self.name, self.name)
-            )
+            body = f"If you meant module `{self.name}`, then add `import {self.name}` to the beginning of your script"
 
             if self.name in likely_importable_functions:
                 relevance += 3
@@ -414,10 +411,7 @@ class NameErrorHelper(ErrorHelper):
             if function_names:
                 relevance = 9
                 body = (
-                    (
-                        "Name `%s` defined in `%s` is not accessible in the global/module level."
-                        % (self.name, " and ".join(function_names))
-                    )
+                    f'Name `{self.name}` defined in `{" and ".join(function_names)}` is not accessible in the global/module level.'
                     + "\n\nIf you need that data at the global level, then consider changing the function so that it `return`-s the value."
                 )
 
@@ -449,18 +443,27 @@ class NameErrorHelper(ErrorHelper):
         "TODO:"
 
     def _is_call_function(self):
-        return self.name + "(" in (
-            self.error_info["line"].replace(" ", "").replace("\n", "").replace("\r", "")
+        return f"{self.name}(" in (
+            self.error_info["line"]
+            .replace(" ", "")
+            .replace("\n", "")
+            .replace("\r", "")
         )
 
     def _is_subscript_value(self):
-        return self.name + "[" in (
-            self.error_info["line"].replace(" ", "").replace("\n", "").replace("\r", "")
+        return f"{self.name}[" in (
+            self.error_info["line"]
+            .replace(" ", "")
+            .replace("\n", "")
+            .replace("\r", "")
         )
 
     def _is_attribute_value(self):
-        return self.name + "." in (
-            self.error_info["line"].replace(" ", "").replace("\n", "").replace("\r", "")
+        return f"{self.name}." in (
+            self.error_info["line"]
+            .replace(" ", "")
+            .replace("\n", "")
+            .replace("\r", "")
         )
 
 
@@ -478,13 +481,18 @@ class AttributeErrorHelper(ErrorHelper):
         self.att_name = names[1].strip("'")
 
         self.intro_text = (
-            "Your program tries to "
-            + ("call method " if self._is_call_function() else "access attribute ")
-            + "`%s` of " % self.att_name
+            (
+                "Your program tries to "
+                + (
+                    "call method "
+                    if self._is_call_function()
+                    else "access attribute "
+                )
+                + f"`{self.att_name}` of "
+            )
             + _get_phrase_for_object(self.type_name)
             + ", but this type doesn't have such "
-            + ("method." if self._is_call_function() else "attribute.")
-        )
+        ) + ("method." if self._is_call_function() else "attribute.")
 
         self.suggestions = [
             self._sug_wrong_attribute_instead_of_len(),
@@ -493,27 +501,23 @@ class AttributeErrorHelper(ErrorHelper):
         ]
 
     def _sug_wrong_attribute_instead_of_len(self):
-        if self.type_name == "str":
-            goal = "length"
-        elif self.type_name == "bytes":
+        if self.type_name == "bytes":
             goal = "number of bytes"
-        elif self.type_name == "list":
-            goal = "number of elements"
-        elif self.type_name == "tuple":
-            goal = "number of elements"
-        elif self.type_name == "set":
-            goal = "number of elements"
         elif self.type_name == "dict":
             goal = "number of entries"
+        elif self.type_name in ["list", "tuple", "set"]:
+            goal = "number of elements"
+        elif self.type_name == "str":
+            goal = "length"
         else:
             return None
 
         return Suggestion(
             "wrong-attribute-instead-of-len",
-            "Did you mean to ask the %s?" % goal,
+            f"Did you mean to ask the {goal}?",
             "This can be done with function `len`, eg:\n\n`len(%s)`"
             % _get_sample_for_type(self.type_name),
-            (9 if self.att_name.lower() in ("len", "length", "size") else 0),
+            9 if self.att_name.lower() in ("len", "length", "size") else 0,
         )
 
     def _sug_bad_spelling(self):
@@ -534,15 +538,16 @@ class AttributeErrorHelper(ErrorHelper):
         return Suggestion(
             "wrong-type-attribute",
             "Did you expect another type?",
-            "If you didn't mean %s %s, " % (action, _get_phrase_for_object(self.type_name))
-            + "then step through your program to see "
-            + "why this type appears here.",
+            f"If you didn't mean {action} {_get_phrase_for_object(self.type_name)}, then step through your program to see why this type appears here.",
             3,
         )
 
     def _is_call_function(self):
-        return "." + self.att_name + "(" in (
-            self.error_info["line"].replace(" ", "").replace("\n", "").replace("\r", "")
+        return f".{self.att_name}(" in (
+            self.error_info["line"]
+            .replace(" ", "")
+            .replace("\n", "")
+            .replace("\r", "")
         )
 
 
@@ -637,7 +642,7 @@ class TypeErrorHelper(ErrorHelper):
         ]:
             m = re.match(r, error_info["message"], re.I)  # @UndefinedVariable
             if m is not None:
-                self._bad_string_concatenation(m.group(1), string_first)
+                self._bad_string_concatenation(m[1], string_first)
                 return
 
         # TODO: other operations, when one side is string
@@ -651,9 +656,10 @@ class TypeErrorHelper(ErrorHelper):
             Suggestion(
                 "convert-other-operand-to-string",
                 "Did you mean to treat both sides as text and produce a string?",
-                "In this case you should apply function `str` to the %s "
-                % _get_phrase_for_object(other_type_name, False)
-                + "in order to convert it to string first, eg:\n\n"
+                (
+                    f"In this case you should apply function `str` to the {_get_phrase_for_object(other_type_name, False)} "
+                    + "in order to convert it to string first, eg:\n\n"
+                )
                 + ("`'abc' + str(%s)`" if string_first else "`str(%s) + 'abc'`")
                 % _get_sample_for_type(other_type_name),
                 8,
@@ -684,13 +690,12 @@ def _get_phrase_for_object(type_name, with_article=True):
         "set": "a set",
         "bool": "a boolean",
     }
-    result = friendly_names.get(type_name, "an object of type '%s'" % type_name)
+    result = friendly_names.get(type_name, f"an object of type '{type_name}'")
 
     if with_article:
         return result
-    else:
-        _, rest = result.split(" ", maxsplit=1)
-        return rest
+    _, rest = result.split(" ", maxsplit=1)
+    return rest
 
 
 def _get_sample_for_type(type_name):

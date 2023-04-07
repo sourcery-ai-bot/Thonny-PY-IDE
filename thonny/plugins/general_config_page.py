@@ -130,16 +130,17 @@ class GeneralConfigurationPage(ConfigurationPage):
             entry = entry.strip("\r\n")
             env.append(entry)
 
-        if any(entry.endswith("'") or entry.endswith('"') for entry in env):
-            if not messagebox.askyesno(
-                tr("Warning"),
-                tr(
-                    "If you quote the value of an environment variable, the quotes will"
-                    " be part of the value.\nDid you intend this?"
-                ),
-                parent=self,
-            ):
-                return False
+        if any(
+            entry.endswith("'") or entry.endswith('"') for entry in env
+        ) and not messagebox.askyesno(
+            tr("Warning"),
+            tr(
+                "If you quote the value of an environment variable, the quotes will"
+                " be part of the value.\nDid you intend this?"
+            ),
+            parent=self,
+        ):
+            return False
 
         get_workbench().set_option("general.environment", env)
 

@@ -7,9 +7,11 @@ from setuptools import find_packages, setup
 def recursive_files(directory):
     paths = []
     for (path, _, filenames) in os.walk(directory):
-        for filename in filenames:
-            if not filename.endswith(".pyc") and filename != "registered.json":
-                paths.append(os.path.join('..', path, filename))
+        paths.extend(
+            os.path.join('..', path, filename)
+            for filename in filenames
+            if not filename.endswith(".pyc") and filename != "registered.json"
+        )
     return paths
 
 if sys.version_info < (3, 6):
@@ -20,11 +22,13 @@ setupdir = os.path.dirname(__file__)
 with open(os.path.join(setupdir, "thonny", "VERSION"), encoding="ASCII") as f:
     version = f.read().strip()
 
-requirements = []
-for line in open(os.path.join(setupdir, "requirements.txt"), encoding="ASCII"):
-    if line.strip() and not line.startswith("#"):
-        requirements.append(line)
-
+requirements = [
+    line
+    for line in open(
+        os.path.join(setupdir, "requirements.txt"), encoding="ASCII"
+    )
+    if line.strip() and not line.startswith("#")
+]
 setup(
     name="thonny",
     version=version,

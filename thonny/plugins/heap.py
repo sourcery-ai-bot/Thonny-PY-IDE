@@ -56,21 +56,17 @@ class HeapView(MemoryFrame):
 
     def get_object_id(self):
         iid = self.tree.focus()
-        if iid != "":
-            return parse_object_id(self.tree.item(iid)["values"][0])
-
-        return None
+        return parse_object_id(self.tree.item(iid)["values"][0]) if iid != "" else None
 
     def _request_heap_data(self, msg=None, even_when_hidden=False):
-        if self.winfo_ismapped() or even_when_hidden:
-            # TODO: update itself also when it becomes visible
-            if get_runner() is not None:
-                get_runner().send_command(InlineCommand("get_heap"))
+        if (
+            self.winfo_ismapped() or even_when_hidden
+        ) and get_runner() is not None:
+            get_runner().send_command(InlineCommand("get_heap"))
 
     def _handle_heap_event(self, msg):
-        if self.winfo_ismapped():
-            if hasattr(msg, "heap"):
-                self._update_data(msg.heap)
+        if self.winfo_ismapped() and hasattr(msg, "heap"):
+            self._update_data(msg.heap)
 
     def _on_map(self, event):
         self.info_label.grid(row=0, column=1005)

@@ -189,10 +189,10 @@ def get_ipc_file_path():
     else:
         username = os.path.basename(os.path.expanduser("~"))
 
-    ipc_dir = os.path.join(base_dir, "thonny-%s" % username)
+    ipc_dir = os.path.join(base_dir, f"thonny-{username}")
     os.makedirs(ipc_dir, exist_ok=True)
 
-    if not sys.platform == "win32":
+    if sys.platform != "win32":
         os.chmod(ipc_dir, 0o700)
 
     _IPC_FILE = os.path.join(ipc_dir, "ipc.sock")
@@ -202,17 +202,16 @@ def get_ipc_file_path():
 def _check_welcome():
     from thonny import misc_utils
 
-    if not os.path.exists(CONFIGURATION_FILE) and not misc_utils.running_on_rpi():
-        from thonny.config import ConfigurationManager
-        from thonny.first_run import FirstRunWindow
-
-        mgr = ConfigurationManager(CONFIGURATION_FILE)
-
-        win = FirstRunWindow(mgr)
-        win.mainloop()
-        return win.ok
-    else:
+    if os.path.exists(CONFIGURATION_FILE) or misc_utils.running_on_rpi():
         return True
+    from thonny.config import ConfigurationManager
+    from thonny.first_run import FirstRunWindow
+
+    mgr = ConfigurationManager(CONFIGURATION_FILE)
+
+    win = FirstRunWindow(mgr)
+    win.mainloop()
+    return win.ok
 
 
 def launch():
@@ -276,29 +275,30 @@ def launch():
 
 
 def prepare_thonny_user_dir():
-    if not os.path.exists(THONNY_USER_DIR):
-        os.makedirs(THONNY_USER_DIR, mode=0o700, exist_ok=True)
+    if os.path.exists(THONNY_USER_DIR):
+        return
+    os.makedirs(THONNY_USER_DIR, mode=0o700, exist_ok=True)
 
-        # user_dir_template is a post-installation means for providing
-        # alternative default user environment in multi-user setups
-        template_dir = os.path.join(os.path.dirname(__file__), "user_dir_template")
+    # user_dir_template is a post-installation means for providing
+    # alternative default user environment in multi-user setups
+    template_dir = os.path.join(os.path.dirname(__file__), "user_dir_template")
 
-        if os.path.isdir(template_dir):
-            import shutil
+    if os.path.isdir(template_dir):
+        import shutil
 
-            def copy_contents(src_dir, dest_dir):
-                # I want the copy to have current user permissions
-                for name in os.listdir(src_dir):
-                    src_item = os.path.join(src_dir, name)
-                    dest_item = os.path.join(dest_dir, name)
-                    if os.path.isdir(src_item):
-                        os.makedirs(dest_item, mode=0o700)
-                        copy_contents(src_item, dest_item)
-                    else:
-                        shutil.copyfile(src_item, dest_item)
-                        os.chmod(dest_item, 0o600)
+        def copy_contents(src_dir, dest_dir):
+            # I want the copy to have current user permissions
+            for name in os.listdir(src_dir):
+                src_item = os.path.join(src_dir, name)
+                dest_item = os.path.join(dest_dir, name)
+                if os.path.isdir(src_item):
+                    os.makedirs(dest_item, mode=0o700)
+                    copy_contents(src_item, dest_item)
+                else:
+                    shutil.copyfile(src_item, dest_item)
+                    os.chmod(dest_item, 0o600)
 
-            copy_contents(template_dir, THONNY_USER_DIR)
+        copy_contents(template_dir, THONNY_USER_DIR)
 
 
 def _should_delegate():
@@ -410,13 +410,7 @@ def _get_orig_argv() -> Optional[List[str]]:
             # This symbol is not available in thonny.exe built agains Python 3.8
             return None
 
-        # Ctypes are weird. They can't be used in list comprehensions, you can't use `in` with them, and you can't
-        # use a for-each loop on them. We have to do an old-school for-i loop.
-        arguments = list()
-        for i in range(argc.value):
-            arguments.append(argv[i])
-
-        return arguments
+        return [argv[i] for i in range(argc.value)]
 
 
 def _configure_logging(log_file, console_level=None):
@@ -510,10 +504,7 @@ def set_logging_level(level=None):
 
 
 def _choose_logging_level():
-    if in_debug_mode():
-        return logging.DEBUG
-    else:
-        return logging.INFO
+    return logging.DEBUG if in_debug_mode() else logging.INFO
 
 
 def in_debug_mode() -> bool:

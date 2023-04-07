@@ -141,7 +141,7 @@ class BaseAdapter(Adapter, ABC):
 
         # https://docs.micropython.org/en/latest/reference/mpyfiles.html#versioning-and-compatibility-of-mpy-files
         args = []
-        arch = [
+        if arch := [
             None,
             "x86",
             "x64",
@@ -153,9 +153,8 @@ class BaseAdapter(Adapter, ABC):
             "armv7emdp",
             "xtensa",
             "xtensawin",
-        ][sys_mpy >> 10]
-        if arch:
-            args.append("-march=" + arch)
+        ][sys_mpy >> 10]:
+            args.append(f"-march={arch}")
         if not sys_mpy & 0x200:
             args.append("-mno-unicode")
 
@@ -298,12 +297,11 @@ class BaseAdapter(Adapter, ABC):
             or path.endswith(":\\")
         ):
             return
-        else:
-            parent, _ = self.split_dir_and_basename(path)
-            if parent:
-                self.ensure_dir_exists(parent)
-            self.mkdir_in_existing_parent_exists_ok(path)
-            self._ensured_directories.add(path)
+        parent, _ = self.split_dir_and_basename(path)
+        if parent:
+            self.ensure_dir_exists(parent)
+        self.mkdir_in_existing_parent_exists_ok(path)
+        self._ensured_directories.add(path)
 
     @abstractmethod
     def write_file_in_existing_dir(self, path: str, content: bytes) -> None:
@@ -376,12 +374,10 @@ class LocalMirrorAdapter(BaseAdapter, ABC):
     def remove_dir_if_empty(self, path: str) -> bool:
         local_path = self.convert_to_local_path(path)
         assert os.path.isdir(local_path)
-        content = os.listdir(local_path)
-        if content:
+        if content := os.listdir(local_path):
             return False
-        else:
-            os.rmdir(local_path)
-            return True
+        os.rmdir(local_path)
+        return True
 
     def mkdir_in_existing_parent_exists_ok(self, path: str) -> None:
         local_path = self.convert_to_local_path(path)
@@ -400,7 +396,7 @@ class LocalMirrorAdapter(BaseAdapter, ABC):
                 name
                 for name in os.listdir(local_path)
                 if name.endswith(".dist-info")
-                and (dist_name is None or name.startswith(dist_name + "-"))
+                and (dist_name is None or name.startswith(f"{dist_name}-"))
             ]
         except FileNotFoundError:
             # skipping non-existing dirs
@@ -440,9 +436,10 @@ class MountAdapter(LocalMirrorAdapter):
         if os.path.exists(boot_out_path):
             with open(boot_out_path, encoding="utf-8") as fp:
                 firmware_info = fp.readline().strip()
-            match = re.match(r".*?CircuitPython (\d+\.\d+)\..+?", firmware_info)
-            if match:
-                return match.group(1)
+            if match := re.match(
+                r".*?CircuitPython (\d+\.\d+)\..+?", firmware_info
+            ):
+                return match[1]
 
         return None
 

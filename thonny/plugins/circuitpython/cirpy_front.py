@@ -55,7 +55,7 @@ class CircuitPythonProxy(BareMetalMicroPythonProxy):
         }
 
     @classmethod
-    def get_vids_pids_to_avoid(self):
+    def get_vids_pids_to_avoid(cls):
         return VIDS_PIDS_TO_AVOID
 
     def _get_backend_launcher_path(self) -> str:

@@ -90,7 +90,7 @@ class EventLogger:
 
         # select attributes
         data = {}
-        for name in attributes:
+        for name, value in attributes.items():
             # skip some attributes
             if (
                 name.startswith("_")
@@ -101,11 +101,9 @@ class EventLogger:
             ):
                 continue
 
-            value = attributes[name]
-
             if isinstance(value, (tk.BaseWidget, tk.Tk)):
-                data[name + "_id"] = id(value)
-                data[name + "_class"] = value.__class__.__name__
+                data[f"{name}_id"] = id(value)
+                data[f"{name}_class"] = value.__class__.__name__
 
             elif isinstance(value, (str, int, float)):
                 data[name] = value
@@ -165,7 +163,7 @@ def _generate_timestamp_file_name(extension):
 
     for i in range(100):
         filename = os.path.join(
-            folder, time.strftime("%Y-%m-%d_%H-%M-%S_{}.{}".format(i, extension))
+            folder, time.strftime(f"%Y-%m-%d_%H-%M-%S_{i}.{extension}")
         )
         if not os.path.exists(filename):
             return filename

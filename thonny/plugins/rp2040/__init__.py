@@ -33,7 +33,7 @@ class RP2040BackendProxy(BareMetalMicroPythonProxy):
         return thonny.plugins.rp2040.rp2040_back.__file__
 
     @classmethod
-    def get_vids_pids_to_avoid(self):
+    def get_vids_pids_to_avoid(cls):
         return get_uart_adapter_vids_pids() | VIDS_PIDS_TO_AVOID_IN_RP2040
 
 

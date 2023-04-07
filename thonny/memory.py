@@ -13,10 +13,7 @@ MAX_REPR_LENGTH_IN_GRID = 100
 
 def format_object_id(object_id):
     # this format aligns with how Python shows memory addresses
-    if object_id is None:
-        return None
-    else:
-        return "0x" + hex(object_id)[2:]  # .rjust(8,'0')
+    return None if object_id is None else f"0x{hex(object_id)[2:]}"
 
 
 def parse_object_id(object_id_repr):
@@ -44,11 +41,7 @@ class MemoryFrame(TreeFrame):
         if iid != "":
             # NB! Assuming id is second column!
             id_str = self.tree.item(iid)["values"][1]
-            if id_str in ["", None, "None"]:
-                return None
-
-            return parse_object_id(id_str)
-
+            return None if id_str in ["", None, "None"] else parse_object_id(id_str)
         return None
 
 

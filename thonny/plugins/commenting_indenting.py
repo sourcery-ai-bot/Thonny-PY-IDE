@@ -27,7 +27,7 @@ def _selection_is_line_commented(text):
     sel_range = _get_focused_code_range(text)
 
     for lineno in range(sel_range.lineno, sel_range.end_lineno + 1):
-        line = text.get(str(lineno) + ".0", str(lineno) + ".end")
+        line = text.get(f"{str(lineno)}.0", f"{str(lineno)}.end")
         if not line.startswith(BLOCK_COMMENT_PREFIX):
             return False
 
@@ -36,7 +36,7 @@ def _selection_is_line_commented(text):
 
 def _select_lines(text, first_line, last_line):
     text.tag_remove("sel", "1.0", tk.END)
-    text.tag_add("sel", str(first_line) + ".0", str(last_line) + ".end")
+    text.tag_add("sel", f"{str(first_line)}.0", f"{str(last_line)}.end")
 
 
 def _toggle_selection_comment(text):
@@ -53,7 +53,7 @@ def _comment_selection(text):
     sel_range = _get_focused_code_range(text)
 
     for lineno in range(sel_range.lineno, sel_range.end_lineno + 1):
-        text.insert(str(lineno) + ".0", BLOCK_COMMENT_PREFIX)
+        text.insert(f"{str(lineno)}.0", BLOCK_COMMENT_PREFIX)
 
     if sel_range.end_lineno > sel_range.lineno:
         _select_lines(text, sel_range.lineno, sel_range.end_lineno)
@@ -65,9 +65,9 @@ def _uncomment_selection(text):
     sel_range = _get_focused_code_range(text)
 
     for lineno in range(sel_range.lineno, sel_range.end_lineno + 1):
-        line = text.get(str(lineno) + ".0", str(lineno) + ".end")
+        line = text.get(f"{str(lineno)}.0", f"{str(lineno)}.end")
         if line.startswith(BLOCK_COMMENT_PREFIX):
-            text.delete(str(lineno) + ".0", str(lineno) + "." + str(len(BLOCK_COMMENT_PREFIX)))
+            text.delete(f"{str(lineno)}.0", f"{str(lineno)}.{len(BLOCK_COMMENT_PREFIX)}")
 
 
 def _get_focused_code_range(text):
@@ -78,7 +78,7 @@ def _get_focused_code_range(text):
         if end_lineno > lineno and end_col_offset == 0:
             # SelectAll includes nonexisting extra line
             end_lineno -= 1
-            end_col_offset = int(text.index(str(end_lineno) + ".end").split(".")[1])
+            end_col_offset = int(text.index(f"{end_lineno}.end").split(".")[1])
     else:
         lineno, col_offset = map(int, text.index(tk.INSERT).split("."))
         end_lineno, end_col_offset = lineno, col_offset

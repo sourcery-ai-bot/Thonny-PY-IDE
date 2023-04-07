@@ -135,7 +135,7 @@ def get_references(
     _check_patch_jedi_typesheds(sys_path)
 
     try:
-        script = _create_script(source + ")", filename, sys_path)
+        script = _create_script(f"{source})", filename, sys_path)
         references = script.get_references(row, column, include_builtins=False, scope=scope)
     except Exception:
         logger.exception("Jedi error")
@@ -180,14 +180,11 @@ def _filter_completions(
     if sys_path is None:
         return completions
 
-    result = []
-    for completion in completions:
-        if completion.name.startswith("__"):
-            continue
-
-        result.append(completion)
-
-    return result
+    return [
+        completion
+        for completion in completions
+        if not completion.name.startswith("__")
+    ]
 
 
 def _export_completion(completion: jedi.api.classes.Completion) -> CompletionInfo:
@@ -209,17 +206,9 @@ def _export_completion(completion: jedi.api.classes.Completion) -> CompletionInf
 
 def _export_signature(sig: BaseSignature) -> SignatureInfo:
     as_string = sig.to_string()
-    if "->" in as_string:
-        # No documented API for getting the return type in 0.18
-        return_type = as_string.split("->")[-1].strip()
-    else:
-        return_type = None
-
-    current_param_index = None
+    return_type = as_string.split("->")[-1].strip() if "->" in as_string else None
     call_bracket_start = None
-    if hasattr(sig, "index"):
-        # only in subclass (Signature or CallSignature)
-        current_param_index = sig.index
+    current_param_index = sig.index if hasattr(sig, "index") else None
     if hasattr(sig, "bracket_start"):
         # only in subclass (Signature or CallSignature)
         call_bracket_start = sig.bracket_start
@@ -256,7 +245,7 @@ def _export_param(param: ParamName) -> SignatureParameter:
 def _export_reference(ref) -> NameReference:
     return NameReference(
         module_name=ref.module_name,
-        module_path=None if not ref.module_path else str(ref.module_path),
+        module_path=str(ref.module_path) if ref.module_path else None,
         row=ref.line,
         column=ref.column,
         length=len(ref.name),
@@ -274,19 +263,18 @@ def _get_completion_name_with_symbols(
     elif completion.type == "function":
         if not signatures:
             # signatures not found or haven't been computed yet
-            return completion.name + "("
-        else:
-            # logger.info("name: %s, type: %s, sigs: %s", completion.name, completion.type, signatures)
-            # assuming type=instance can also have signature
-            # if it can only be called with 0 params, then add closing paren as well
-            different_param_counts = {len(sig.params) for sig in signatures}
-            if different_param_counts == {0}:
-                return completion.name + "()"
-            else:
-                return completion.name + "("
-
+            return f"{completion.name}("
+        # logger.info("name: %s, type: %s, sigs: %s", completion.name, completion.type, signatures)
+        # assuming type=instance can also have signature
+        # if it can only be called with 0 params, then add closing paren as well
+        different_param_counts = {len(sig.params) for sig in signatures}
+        return (
+            f"{completion.name}()"
+            if different_param_counts == {0}
+            else f"{completion.name}("
+        )
     elif completion.type == "keyword" and completion.name != "pass":
-        return completion.name + " "
+        return f"{completion.name} "
 
     return completion.name_with_symbols
 

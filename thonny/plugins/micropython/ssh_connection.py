@@ -12,9 +12,8 @@ class SshProcessConnection(MicroPythonConnection):
 
         cmd_line_str = (
             "echo $$ ;"
-            + ((" cd %s  2> /dev/null ;" % shlex.quote(cwd) if cwd else ""))
-            + (" exec " + " ".join(map(shlex.quote, cmd)))
-        )
+            + (f" cd {shlex.quote(cwd)}  2> /dev/null ;" if cwd else "")
+        ) + (" exec " + " ".join(map(shlex.quote, cmd)))
         self._stdin, self._stdout, _ = self._client.exec_command(
             cmd_line_str, bufsize=0, timeout=None, get_pty=True
         )
@@ -47,7 +46,7 @@ class SshProcessConnection(MicroPythonConnection):
             self._error = str(e)
 
     def close(self):
-        self._client.exec_command("kill -s SIGKILL %s" % self._pid)
+        self._client.exec_command(f"kill -s SIGKILL {self._pid}")
         self._reading_thread.join()
         self._client = None
         self._reading_thread = None

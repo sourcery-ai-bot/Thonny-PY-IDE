@@ -46,22 +46,6 @@ class AboutDialog(CommonDialogEx):
                 system_desc = "Linux"
 
             if "32" not in system_desc and "64" not in system_desc:
-                system_desc += f" {self.get_os_word_size_guess()}"
-        elif sys.platform == "win32":
-            release = platform.release()
-            # Win 10 and 11 both give 10 as release
-            try:
-                build = int(platform.version().split(".")[2])
-                if release == "10" and build >= 22000:
-                    release = "11"
-            except Exception:
-                logger.exception("Could not determine Windows version")
-
-            system_desc = f"{platform.system()} {release} {self.get_os_word_size_guess()}"
-
-        else:
-            release = platform.release()
-            system_desc = f"{platform.system()} {release} {self.get_os_word_size_guess()}"
 
         platform_label = ttk.Label(
             self.main_frame,
@@ -69,7 +53,7 @@ class AboutDialog(CommonDialogEx):
             text=system_desc
             + "\n"
             + "Python "
-            + get_python_version_string(maxsize=sys.maxsize)
+            + get_python_version_string()
             + "\n"
             + "Tk "
             + ui_utils.get_tk_version_str(),
@@ -120,11 +104,9 @@ class AboutDialog(CommonDialogEx):
 
         self.bind("<Return>", self.on_close, True)
 
-    def get_os_word_size_guess(self):
+    def get_os_word_size_suffix(self):
         if "32" in platform.machine() and "64" not in platform.machine():
-            return "(32-bit)"
-        elif "64" in platform.machine() and "32" not in platform.machine():
-            return "(64-bit)"
+            return " (32-bit)"
         else:
             return ""
 

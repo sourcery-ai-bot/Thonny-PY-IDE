@@ -103,7 +103,7 @@ class TodoView(ui_utils.TreeFrame):
 
         # todo support of other file types and introducing comment tags
 
-        r_ex = r"^.*((#[\t ]*(TODO|BUG|FIXME|ERROR|NOTE|REMARK)([:\t ]*))(.*))$"
+        r_ex = r"^.*((#.*[\t ]*(TODO|BUG|FIXME|ERROR|NOTE|REMARK)([:\t ]*))(.*))$"
         r_match = re.compile(r_ex, re.IGNORECASE | re.MULTILINE)
 
         for line_no, line in enumerate(new_source.splitlines(), start=1):

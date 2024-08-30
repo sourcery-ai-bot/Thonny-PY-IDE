@@ -822,6 +822,7 @@ def sequence_to_accelerator(sequence):
         .replace("minus", "-")
         .replace("Plus", "+")
         .replace("plus", "+")
+        .replace("space", "Space")
     )
 
 
@@ -2490,9 +2491,21 @@ class AdvancedLabel(ttk.Label):
 
     def _on_click(self, *event):
         if self._url:
-            import webbrowser
+            if os.path.isdir(self._url):
+                open_with_default_app(self._url)
+            else:
+                import webbrowser
 
-            webbrowser.open(self._url)
+                webbrowser.open(self._url)
+
+
+def open_with_default_app(path):
+    if running_on_windows():
+        os.startfile(path)
+    elif running_on_mac_os():
+        subprocess.run(["open", path])
+    else:
+        subprocess.run(["xdg-open", path])
 
 
 if __name__ == "__main__":
